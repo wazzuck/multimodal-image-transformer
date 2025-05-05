@@ -342,7 +342,9 @@ def main():
         # --- Save and Upload Best Model --- 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            save_path = os.path.join(config.OUTPUT_DIR, "best_model_train.safetensors")
+            # save the model if it is the best so far
+            filename = f"multimodal_image_transformer_model_epoch{epoch}.safetensors"
+            save_path = os.path.join(config.OUTPUT_DIR, filename)
             save_file(model.state_dict(), save_path)
             print(f"\tBest model saved to {save_path}")
             # Upload best model checkpoint to Hub
