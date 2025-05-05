@@ -13,6 +13,7 @@ import config
 # Import the specific processor type based on config
 from transformers import ViTImageProcessor, CLIPProcessor
 from tokenizer import get_tokenizer # Use the shared tokenizer instance
+from tokenizers import Encoding # <-- Add this import
 
 # Get the appropriate processor from the encoder module or config
 # This avoids direct dependency on encoder internals here
