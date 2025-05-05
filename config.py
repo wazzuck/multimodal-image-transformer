@@ -10,10 +10,10 @@ RANDOM_SEED = 42
 
 # --- Data Settings ---
 # Adjust these paths based on your dataset structure
-DATA_DIR = "data/" # Directory containing images and caption file
+DATA_DIR = "data" # Directory containing images and caption file
 IMAGE_DIR = f"{DATA_DIR}/images/"
 CAPTIONS_FILE = f"{DATA_DIR}/captions.json" # Example: JSON file mapping image filenames to captions
-OUTPUT_DIR = "outputs/" # Directory to save checkpoints and logs
+OUTPUT_DIR = "outputs" # Directory to save checkpoints and logs
 
 # --- Model Settings ---
 # Choose the pre-trained image encoder model

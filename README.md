@@ -46,32 +46,53 @@ The model follows a standard Encoder-Decoder architecture:
 *   Transformers (Hugging Face)
 *   Pillow (PIL)
 *   NumPy
+*   Requests (for dataset download)
 *   (See `requirements.txt` for specific versions)
 
-## Data Format
+## Dataset Setup (Flickr30k)
 
-The model expects a dataset of image-text pairs. A common format would be:
+The model is configured to use the Flickr30k dataset.
 
-*   A directory containing all image files (e.g., `data/images/`).
-*   A corresponding metadata file (e.g., `data/captions.json` or `data/captions.csv`) mapping image filenames to their textual descriptions/captions.
-
-The `dataset.py` script needs to be adapted based on the specific structure of your dataset.
+*   **Automatic Download:** When you run the training script (`train.py`) for the first time, it will automatically check if the dataset exists in the `./data` directory.
+    *   If the dataset (specifically `./data/images/` and `./data/captions.json`) is not found, the script `prepare_dataset.py` will automatically:
+        1.  Download the Flickr30k dataset (images and captions CSV) from [awsaf49/flickr-dataset](https://github.com/awsaf49/flickr-dataset) (approx. 4.4 GB compressed).
+        2.  Extract the images into `./data/images/`.
+        3.  Convert the caption data from the original CSV format into `./data/captions.json` (mapping image filenames to lists of captions).
+        4.  Clean up temporary download files.
+    *   This process requires the `requests` library (included in `requirements.txt`) and an internet connection. It may take a significant amount of time depending on your connection speed.
+*   **Manual Setup (Optional):** If you prefer to download the data manually or use a different dataset, you will need to:
+    1.  Place your image files in `./data/images/`.
+    2.  Create a `./data/captions.json` file mapping your image filenames to a list of their corresponding captions. The structure should be: `{"image1.jpg": ["caption A", "caption B"], "image2.jpg": ["caption C"], ...}`.
+    3.  You might need to adapt `dataset.py` if your data format or structure differs significantly.
 
 ## Usage
 
 1.  **Installation:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+    *   Ensure you have Miniconda or Anaconda installed.
+    *   (Optional) Run the setup scripts:
+        ```bash
+        # Installs Miniconda if needed
+        bash 00_setup.sh 
+        # Installs dependencies from requirements.txt
+        bash 01_setup.sh 
+        # Make sure conda environment is active or restart shell
+        ```
+    *   Alternatively, manually create an environment and install requirements:
+        ```bash
+        # conda create -n multimodal python=3.10 # Example
+        # conda activate multimodal
+        pip install -r requirements.txt
+        ```
 
 2.  **Configuration:**
-    *   Modify `config.py` to set hyperparameters, model choices (ViT/CLIP encoder), data paths, output directories, etc.
+    *   Modify `config.py` to set hyperparameters, choose the encoder model (`ENCODER_MODEL_NAME`), review file paths (though defaults should work with automatic download), etc.
 
 3.  **Training:**
     ```bash
     python train.py
     ```
-    *   Checkpoints will be saved in the directory specified in `config.py`.
+    *   The first time you run this, it will attempt to download and prepare the Flickr30k dataset automatically (see Dataset Setup section).
+    *   Checkpoints will be saved in the `./outputs` directory (or as configured in `config.py`).
 
 4.  **Inference:**
     ```bash
@@ -94,8 +115,9 @@ The `dataset.py` script needs to be adapted based on the specific structure of y
 ├── train.py                # Script for model training
 ├── inference.py            # Script for generating text from an image
 ├── utils.py                # Utility functions (e.g., positional encoding)
-└── data/                   # (Example) Directory for dataset
-    ├── images/
-    └── captions.json
-└── outputs/                # (Example) Directory for saved models/results
+└── data/                   # Directory for dataset
+    ├── images/             # Image files (automatically downloaded)
+    └── captions.json       # Caption data (automatically downloaded & converted)
+└── outputs/                # Directory for saved models/results
+└── temp_download/          # Temporary directory used during dataset download (removed after)
 ``` 

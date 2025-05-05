@@ -13,6 +13,7 @@ import config
 import os
 import time
 from tqdm import tqdm # For progress bar
+import prepare_dataset # Import the new preparation script
 
 def train_one_epoch(model, dataloader, optimizer, criterion, device, grad_clip_value=None):
     """Runs one epoch of training."""
@@ -112,6 +113,12 @@ def evaluate(model, dataloader, criterion, device):
 
 def main():
     """Main training loop."""
+    # --- Ensure dataset is ready --- #
+    print("Checking and preparing dataset if necessary...")
+    prepare_dataset.prepare_flickr30k()
+    print("Dataset preparation check complete.")
+    # --- Resume original main function --- #
+
     # Ensure output directory exists
     os.makedirs(config.OUTPUT_DIR, exist_ok=True)
 
