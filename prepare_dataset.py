@@ -14,12 +14,15 @@ import json
 from pathlib import Path
 from tqdm import tqdm
 
-# Configuration (could also be moved to config.py if preferred)
-DATA_DIR = Path("data")
+# Determine the script's directory
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+# Configuration based on script location
+DATA_DIR = SCRIPT_DIR / "data"
 IMAGE_DIR = DATA_DIR / "images"
 CAPTIONS_JSON_PATH = DATA_DIR / "captions.json"
-CAPTIONS_CSV_PATH = DATA_DIR / "captions.csv" # Temporary path after extraction
-DOWNLOAD_DIR = Path("temp_download") # Temporary directory for downloads
+CAPTIONS_CSV_PATH = DATA_DIR / "captions.csv" # Temporary path after extraction (relative to DATA_DIR)
+DOWNLOAD_DIR = SCRIPT_DIR / "temp_download" # Temporary directory for downloads (relative to script dir)
 
 # URLs for Flickr30k parts from awsaf49/flickr-dataset release
 FLICKR30K_URLS = [
