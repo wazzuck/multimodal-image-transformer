@@ -188,18 +188,42 @@ def prepare_flickr30k():
 
     # 4. Move Images
     print("Moving images...")
-    source_image_dir = EXTRACT_DIR / "images" # Adjust if zip structure differs
-    if source_image_dir.is_dir():
-        try:
-            # Use shutil.copytree for robustness or iterate and move
-            for item in source_image_dir.iterdir():
-                 if item.is_file() and item.suffix.lower() in ['.jpg', '.jpeg', '.png']: # Basic check
-                     shutil.move(str(item), IMAGE_DIR / item.name)
-        except Exception as e:
-             print(f"Error moving images from {source_image_dir}: {e}")
-             # Consider cleanup or exiting depending on severity
+    source_image_dir_option1 = EXTRACT_DIR / "images" # Original assumption
+    source_image_dir_option2 = EXTRACT_DIR      # Alternative: images directly in extract dir
+    actual_source_dir = None
+
+    if source_image_dir_option1.is_dir():
+        actual_source_dir = source_image_dir_option1
+        print(f"Found images in {actual_source_dir}")
     else:
-        print(f"Warning: Expected image directory not found after extraction: {source_image_dir}")
+        # Check if images are directly in the extraction folder
+        image_files_found = False
+        try:
+            for item in source_image_dir_option2.iterdir():
+                if item.is_file() and item.suffix.lower() in ['.jpg', '.jpeg', '.png']:
+                    image_files_found = True
+                    break
+        except FileNotFoundError:
+             pass # Handle case where EXTRACT_DIR itself might not exist
+
+        if image_files_found:
+             actual_source_dir = source_image_dir_option2
+             print(f"Found images directly in {actual_source_dir}")
+
+    if actual_source_dir:
+        try:
+            moved_count = 0
+            for item in actual_source_dir.iterdir():
+                if item.is_file() and item.suffix.lower() in ['.jpg', '.jpeg', '.png']:
+                    target_path = IMAGE_DIR / item.name
+                    shutil.move(str(item), target_path)
+                    moved_count += 1
+            print(f"Moved {moved_count} image files to {IMAGE_DIR}")
+        except Exception as e:
+            print(f"Error moving images from {actual_source_dir}: {e}")
+            # Consider cleanup or exiting depending on severity
+    else:
+        print(f"Warning: Could not find image files in expected locations ({source_image_dir_option1} or {source_image_dir_option2}).")
 
     # 5. Convert Captions (CSV to JSON)
     # Find the captions CSV file (might be named results.csv)
