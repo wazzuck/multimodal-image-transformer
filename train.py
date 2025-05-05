@@ -14,6 +14,7 @@ import os
 import time
 from tqdm import tqdm # For progress bar
 import prepare_dataset # Import the new preparation script
+from safetensors.torch import save_file # Import safetensors saving function
 
 def train_one_epoch(model, dataloader, optimizer, criterion, device, grad_clip_value=None):
     """Runs one epoch of training."""
@@ -219,15 +220,18 @@ def main():
         # Save the best model based on validation loss
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            save_path = os.path.join(config.OUTPUT_DIR, "best_model.pth")
-            torch.save(model.state_dict(), save_path)
+            # Update extension to .safetensors
+            save_path = os.path.join(config.OUTPUT_DIR, "best_model.safetensors")
+            # Use save_file for safetensors format
+            save_file(model.state_dict(), save_path)
             print(f"\tBest model saved to {save_path}")
 
-        # Save checkpoint periodically (optional)
-        # if (epoch + 1) % 5 == 0:
-        #     chkpt_path = os.path.join(config.OUTPUT_DIR, f"checkpoint_epoch_{epoch+1}.pth")
-        #     torch.save(model.state_dict(), chkpt_path)
-        #     print(f"\tCheckpoint saved to {chkpt_path}")
+        # Save checkpoint every epoch
+        # Update extension to .safetensors
+        chkpt_path = os.path.join(config.OUTPUT_DIR, f"checkpoint_epoch_{epoch+1}.safetensors")
+        # Use save_file for safetensors format
+        save_file(model.state_dict(), chkpt_path)
+        print(f"\tCheckpoint saved to {chkpt_path}")
 
     print("Training finished.")
 
