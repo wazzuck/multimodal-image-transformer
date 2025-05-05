@@ -6,3 +6,4 @@ requests
 Pillow
 safetensors
 huggingface_hub
+wandb

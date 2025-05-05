@@ -16,8 +16,49 @@ import json # Needed for loading captions
 from tqdm import tqdm # For progress bar
 import prepare_dataset # Import the new preparation script
 from safetensors.torch import save_file # Import safetensors saving function
+import wandb # <-- Add wandb import
+from huggingface_hub import HfApi, create_repo # <-- Add Hub imports
 
-def train_one_epoch(model, dataloader, optimizer, criterion, device, grad_clip_value=None):
+def setup_wandb(cfg):
+    """Initializes wandb run."""
+    # Combine relevant hyperparameters into a dictionary
+    hyperparameters = {
+        'encoder_model': cfg.ENCODER_MODEL_NAME,
+        'decoder_layers': cfg.DECODER_LAYERS,
+        'decoder_heads': cfg.DECODER_HEADS,
+        'decoder_ff_dim': cfg.DECODER_FF_DIM,
+        'embedding_dim': cfg.EMBEDDING_DIM,
+        'max_seq_len': cfg.MAX_SEQ_LEN,
+        'dropout': cfg.DROPOUT,
+        'learning_rate': cfg.LEARNING_RATE,
+        'epochs': cfg.EPOCHS,
+        'batch_size': cfg.BATCH_SIZE,
+        'vocab_size': cfg.VOCAB_SIZE, # Log vocab size after tokenizer setup
+        'warmup_steps': cfg.WARMUP_STEPS,
+        'adam_beta1': cfg.ADAM_BETA1,
+        'adam_beta2': cfg.ADAM_BETA2,
+        'adam_eps': cfg.ADAM_EPS,
+        'weight_decay': cfg.WEIGHT_DECAY,
+        'grad_clip': cfg.GRAD_CLIP_VALUE,
+        'projection_dim': cfg.PROJECTION_DIM,
+        'image_dir': cfg.IMAGE_DIR,
+        'captions_file': cfg.CAPTIONS_FILE,
+        'output_dir': cfg.OUTPUT_DIR,
+        'checkpoint_prefix': cfg.CHECKPOINT_PREFIX,
+        'log_interval': cfg.LOG_INTERVAL,
+        'validation_interval': cfg.VALIDATION_INTERVAL
+    }
+    # Initialize wandb
+    run = wandb.init(
+        project=cfg.WANDB_PROJECT, # Get project name from config
+        entity=cfg.WANDB_ENTITY,   # Get entity name from config (optional)
+        config=hyperparameters,
+        name=cfg.WANDB_RUN_NAME    # Optional run name from config
+    )
+    print(f"Wandb run initialized. View at: {run.url}")
+    return run
+
+def train_one_epoch(model, dataloader, optimizer, criterion, device, grad_clip_value, scheduler):
     """Runs one epoch of training."""
     model.train() # Set model to training mode
     total_loss = 0.0
@@ -25,7 +66,7 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, grad_clip_v
 
     progress_bar = tqdm(dataloader, desc="Training Epoch", leave=False)
 
-    for batch in progress_bar:
+    for i, batch in enumerate(progress_bar):
         # Move data to the configured device
         images = batch["images"].to(device)
         decoder_input_tokens = batch["decoder_input_tokens"].to(device)
@@ -72,6 +113,8 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, grad_clip_v
 
         # Optimizer step
         optimizer.step()
+        if scheduler:
+             scheduler.step() # Step the scheduler
 
         total_loss += loss.item()
         progress_bar.set_postfix({'loss': loss.item()})
@@ -128,6 +171,16 @@ def main():
     torch.manual_seed(config.RANDOM_SEED)
     if config.DEVICE == "cuda":
         torch.cuda.manual_seed(config.RANDOM_SEED)
+
+    # --- Hugging Face Hub Setup ---
+    print(f"Attempting to create or use repo: {config.HF_REPO_ID}")
+    try:
+        hf_api = HfApi()
+        create_repo(config.HF_REPO_ID, repo_type="model", exist_ok=True)
+        print(f"Hugging Face Hub repository '{config.HF_REPO_ID}' ensured.")
+    except Exception as e:
+        print(f"Warning: Could not create/access Hugging Face Hub repo '{config.HF_REPO_ID}'. Uploads will be skipped. Error: {e}")
+        hf_api = None # Set api to None if setup fails
 
     # --- Tokenizer Training (if needed) --- #
     print("Checking tokenizer vocabulary...")
@@ -250,6 +303,19 @@ def main():
     # Use CrossEntropyLoss, ignore padding index
     criterion = nn.CrossEntropyLoss(ignore_index=config.PAD_TOKEN_ID)
 
+    # --- Scheduler (Optional) ---
+    if config.WARMUP_STEPS > 0:
+        num_training_steps = len(train_loader) * config.EPOCHS
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=config.WARMUP_STEPS,
+            num_training_steps=num_training_steps
+        )
+        print(f"Using linear warmup scheduler with {config.WARMUP_STEPS} warmup steps.")
+    else:
+        scheduler = None
+        print("No learning rate scheduler used.")
+
     # --- Training Loop --- #
     print("Starting training...")
     best_val_loss = float('inf')
@@ -257,7 +323,7 @@ def main():
     for epoch in range(config.NUM_EPOCHS):
         start_time = time.time()
 
-        train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, config.GRAD_CLIP_VALUE)
+        train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, config.GRAD_CLIP_VALUE, scheduler)
         val_loss = evaluate(model, val_loader, criterion, device)
 
         end_time = time.time()
@@ -267,23 +333,79 @@ def main():
         print(f"\tTrain Loss: {train_loss:.4f}")
         print(f"\t Val. Loss: {val_loss:.4f}")
 
-        # Save the best model based on validation loss
+        # Log epoch metrics to wandb
+        epoch_logs = {
+            "train_epoch_loss": train_loss,
+            "val_epoch_loss": val_loss,
+            "epoch": epoch + 1
+            }
+        if wandb_run: wandb.log(epoch_logs)
+
+        # --- Save and Upload Best Model --- 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            # Update extension to .safetensors
-            save_path = os.path.join(config.OUTPUT_DIR, "best_model.safetensors")
-            # Use save_file for safetensors format
+            save_path = os.path.join(config.OUTPUT_DIR, "best_model_train.safetensors")
             save_file(model.state_dict(), save_path)
             print(f"\tBest model saved to {save_path}")
+            # Upload best model checkpoint to Hub
+            if hf_api:
+                try:
+                    hf_api.upload_file(
+                        path_or_fileobj=save_path,
+                        path_in_repo=os.path.basename(save_path),
+                        repo_id=config.HF_REPO_ID,
+                        repo_type="model",
+                        commit_message=f"Upload best model from epoch {epoch+1} (val_loss: {val_loss:.4f})"
+                    )
+                    print(f"\tUploaded best model to Hugging Face Hub: {config.HF_REPO_ID}")
+                except Exception as e:
+                    print(f"\tWarning: Failed to upload best model checkpoint to Hub. Error: {e}")
 
-        # Save checkpoint every epoch
-        # Update extension to .safetensors
-        chkpt_path = os.path.join(config.OUTPUT_DIR, f"checkpoint_epoch_{epoch+1}.safetensors")
-        # Use save_file for safetensors format
+        # --- Save and Upload Epoch Checkpoint --- 
+        chkpt_path = os.path.join(config.OUTPUT_DIR, f"checkpoint_epoch_{epoch+1}_train.safetensors")
         save_file(model.state_dict(), chkpt_path)
         print(f"\tCheckpoint saved to {chkpt_path}")
+        # Upload epoch checkpoint to Hub
+        if hf_api:
+            try:
+                hf_api.upload_file(
+                    path_or_fileobj=chkpt_path,
+                    path_in_repo=os.path.basename(chkpt_path),
+                    repo_id=config.HF_REPO_ID,
+                    repo_type="model",
+                    commit_message=f"Upload checkpoint from epoch {epoch+1}"
+                )
+                print(f"\tUploaded epoch checkpoint to Hugging Face Hub: {config.HF_REPO_ID}")
+            except Exception as e:
+                print(f"\tWarning: Failed to upload epoch checkpoint to Hub. Error: {e}")
 
-    print("Training finished.")
+    print("\nTraining finished.")
+
+    # --- Save and Upload Final Model --- 
+    final_save_path = os.path.join(config.OUTPUT_DIR, f"final_model_train.safetensors") # Consistent naming
+    save_file(model.state_dict(), final_save_path)
+    print(f"Final model state_dict saved at '{final_save_path}'")
+    # Note: Optimizer/scheduler state not saved in the safetensors file.
+    # Upload final model to Hub
+    if hf_api:
+        try:
+            hf_api.upload_file(
+                path_or_fileobj=final_save_path,
+                path_in_repo=os.path.basename(final_save_path),
+                repo_id=config.HF_REPO_ID,
+                repo_type="model",
+                commit_message="Upload final model checkpoint"
+            )
+            print(f"Uploaded final model to Hugging Face Hub: {config.HF_REPO_ID}")
+        except Exception as e:
+            print(f"Warning: Failed to upload final model checkpoint to Hub. Error: {e}")
+
+    # Optional: Save final model to wandb
+    # if wandb_run:
+    #     wandb.save(final_save_path) # Save the final safetensors file
+
+    # --- Cleanup --- 
+    if wandb_run: wandb.finish() # Ensure wandb finishes cleanly
 
 if __name__ == "__main__":
     # --- Crucial Check: Ensure model.forward expects image tensors --- #

@@ -47,6 +47,8 @@ The model follows a standard Encoder-Decoder architecture:
 *   Pillow (PIL)
 *   NumPy
 *   Requests (for dataset download)
+*   tqdm
+*   wandb (for experiment tracking)
 *   (See `requirements.txt` for specific versions)
 
 ## Dataset Setup (Flickr30k)
@@ -73,7 +75,7 @@ The model is configured to use the Flickr30k dataset.
         ```bash
         # Installs Miniconda if needed
         bash 00_setup.sh 
-        # Installs dependencies from requirements.txt
+        # Installs dependencies from requirements.txt (now includes wandb)
         bash 01_setup.sh 
         # Make sure conda environment is active or restart shell
         ```
@@ -83,16 +85,39 @@ The model is configured to use the Flickr30k dataset.
         # conda activate multimodal
         pip install -r requirements.txt
         ```
+    *   **Weights & Biases Login:** Before running training with wandb enabled, log in to your wandb account:
+        ```bash
+        wandb login
+        ```
+        You will be prompted to enter your API key, which you can find at [https://wandb.ai/authorize](https://wandb.ai/authorize).
+    *   **Hugging Face Hub Login:** To enable automatic model uploads to the Hugging Face Hub during training, log in using the CLI:
+        ```bash
+        huggingface-cli login
+        ```
+        You will be prompted for a token with `write` access, which you can generate at [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).
 
 2.  **Configuration:**
-    *   Modify `config.py` to set hyperparameters, choose the encoder model (`ENCODER_MODEL_NAME`), review file paths (though defaults should work with automatic download), etc.
+    *   Modify `config.py` to set hyperparameters, choose the encoder model (`ENCODER_MODEL_NAME`), review file paths, etc.
+    *   **Add Wandb Settings:** Ensure you add the following settings to `config.py` for experiment tracking:
+        ```python
+        # --- Wandb Configuration ---
+        WANDB_PROJECT = "multimodal-image-transformer" # Your project name
+        WANDB_ENTITY = None # Your wandb username or team (optional, defaults to your default entity)
+        WANDB_RUN_NAME = None # Optional: A specific name for this run (e.g., "vit-base-lr-1e-4")
+        ```
+    *   **Add Hugging Face Hub Settings:** Configure the target repository for model uploads:
+        ```python
+        # --- Hugging Face Hub Settings ---
+        HF_REPO_ID = "wazzuck/multimodal_image_transformer" # Repository ID (e.g., "your-username/your-repo-name")
+        ```
 
 3.  **Training:**
     ```bash
     python train.py
     ```
     *   The first time you run this, it will attempt to download and prepare the Flickr30k dataset automatically (see Dataset Setup section).
-    *   Checkpoints will be saved in the `./outputs` directory (or as configured in `config.py`).
+    *   Checkpoints will be saved in the directory specified by `OUTPUT_DIR` in `config.py` (defaults to `./assets` after the last change).
+    *   If you logged into Hugging Face Hub, checkpoints (`.safetensors` files) will be automatically uploaded to the specified `HF_REPO_ID` at the end of each epoch.
 
 4.  **Inference:**
     ```bash

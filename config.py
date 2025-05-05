@@ -14,7 +14,7 @@ RANDOM_SEED = 42
 DATA_DIR = "assets" # Root directory for prepared dataset assets
 IMAGE_DIR = f"{DATA_DIR}/images" # Images subdirectory
 CAPTIONS_FILE = f"{DATA_DIR}/captions.json" # Captions JSON file
-OUTPUT_DIR = "outputs" # Directory to save checkpoints and logs
+OUTPUT_DIR = "assets" # Directory to save checkpoints and logs
 
 # --- Model Settings ---
 # Choose the pre-trained image encoder model
@@ -54,3 +54,6 @@ MERGES_PATH = os.path.join(OUTPUT_DIR, "merges.txt")
 
 # --- Inference Settings ---
 BEAM_SIZE = 3 # Optional: for beam search decoding 
+
+# --- Hugging Face Hub Settings ---
+HF_REPO_ID = "wazzuck/multimodal_image_transformer" # Repository ID on Hugging Face Hub 
