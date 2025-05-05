@@ -76,26 +76,8 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, grad_clip_v
         optimizer.zero_grad()
 
         # Forward pass
-        # TODO: Modify model.forward to accept processed image tensors directly
-        # instead of PIL images, as preprocessing is done in Dataset/DataLoader.
-        # Current model.forward expects PIL images - needs update!
-        # --- Placeholder: Adapt model call --- #
-        # Assuming model.forward is updated to take image *tensors*
-        # logits = model(images, decoder_input_tokens)
-        # For now, let's simulate the forward pass structure
-        # This requires model.py forward pass to be updated
-        # --- Simulate call --- # 
-        try:
-            logits = model(images, decoder_input_tokens) # Pass tensors
-        except TypeError as e:
-             print("\n*** Error: model.forward likely expects PIL images, but received tensors. ***")
-             print("*** Please update model.py forward method to handle image tensors from DataLoader. ***")
-             print(f"TypeError: {e}")
-             print("Skipping batch...")
-             # Placeholder to avoid crashing during structure creation
-             # Replace with actual error handling or fix model.py
-             logits = torch.randn(target_tokens.shape[0], target_tokens.shape[1], config.VOCAB_SIZE, device=device, requires_grad=True)
-        # --- End Simulate call ---
+        # Model's forward method should now correctly handle image tensors
+        logits = model(images, decoder_input_tokens)
 
         # Calculate loss
         # Logits: (Batch Size, Target Seq Len, Vocab Size)
@@ -137,15 +119,9 @@ def evaluate(model, dataloader, criterion, device):
             decoder_input_tokens = batch["decoder_input_tokens"].to(device)
             target_tokens = batch["target_tokens"].to(device)
 
-            # Forward pass (assuming model.forward handles tensors)
-             # --- Simulate call --- # 
-            try:
-                logits = model(images, decoder_input_tokens)
-            except TypeError as e:
-                 # Placeholder error handling (same as in train_one_epoch)
-                 print("\nEvaluation Error: model.forward issue (see training error).")
-                 logits = torch.randn(target_tokens.shape[0], target_tokens.shape[1], config.VOCAB_SIZE, device=device)
-             # --- End Simulate call ---
+            # Forward pass
+            # Model's forward method handles tensors
+            logits = model(images, decoder_input_tokens)
 
             # Calculate loss
             # Use reshape for target_tokens
@@ -408,14 +384,6 @@ def main():
     if wandb_run: wandb.finish() # Ensure wandb finishes cleanly
 
 if __name__ == "__main__":
-    # --- Crucial Check: Ensure model.forward expects image tensors --- #
-    print("!!! IMPORTANT !!!")
-    print("The current `model.py` forward method expects PIL Images.")
-    print("This training script passes preprocessed *tensors* from the DataLoader.")
-    print("You MUST update `model.py`'s `forward` method to accept image tensors ")
-    print("and remove the internal call to `encode_image`. The encoding should")
-    print("happen *before* the model's forward pass, ideally batched.")
-    print("The current code includes simulation placeholders and will error without this fix.")
-    print("!!!!!!!!!!!!!!!!!!")
-    # Proceeding with the structure, but the forward pass needs fixing in model.py.
+    # Model forward pass expects tensors, which are provided by the DataLoader.
+    # The previous warning is no longer needed.
     main() 
