@@ -62,7 +62,7 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, grad_clip_v
         # Target: (Batch Size, Target Seq Len)
         # Criterion expects logits as (N, C, ...) and target as (N, ...)
         # Reshape logits and target for CrossEntropyLoss
-        loss = criterion(logits.view(-1, logits.size(-1)), target_tokens.view(-1))
+        loss = criterion(logits.view(-1, logits.size(-1)), target_tokens.reshape(-1))
 
         # Backward pass
         loss.backward()
@@ -105,7 +105,8 @@ def evaluate(model, dataloader, criterion, device):
              # --- End Simulate call ---
 
             # Calculate loss
-            loss = criterion(logits.view(-1, logits.size(-1)), target_tokens.view(-1))
+            # Use reshape for target_tokens
+            loss = criterion(logits.view(-1, logits.size(-1)), target_tokens.reshape(-1))
             total_loss += loss.item()
             progress_bar.set_postfix({'loss': loss.item()})
 
