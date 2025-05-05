@@ -18,6 +18,7 @@ import prepare_dataset # Import the new preparation script
 from safetensors.torch import save_file # Import safetensors saving function
 import wandb # <-- Add wandb import
 from huggingface_hub import HfApi, create_repo # <-- Add Hub imports
+from transformers import get_linear_schedule_with_warmup # <-- Add scheduler import
 
 def setup_wandb(cfg):
     """Initializes wandb run."""
@@ -58,15 +59,17 @@ def setup_wandb(cfg):
     print(f"Wandb run initialized. View at: {run.url}")
     return run
 
-def train_one_epoch(model, dataloader, optimizer, criterion, device, grad_clip_value, scheduler):
+def train_one_epoch(model, dataloader, optimizer, criterion, device, grad_clip_value, scheduler, epoch, log_interval, wandb_run):
     """Runs one epoch of training."""
     model.train() # Set model to training mode
     total_loss = 0.0
     num_batches = len(dataloader)
 
-    progress_bar = tqdm(dataloader, desc="Training Epoch", leave=False)
+    progress_bar = tqdm(dataloader, desc=f"Training Epoch {epoch+1}", leave=False)
 
     for i, batch in enumerate(progress_bar):
+        global_step = epoch * num_batches + i
+
         # Move data to the configured device
         images = batch["images"].to(device)
         decoder_input_tokens = batch["decoder_input_tokens"].to(device)
@@ -96,10 +99,22 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, grad_clip_v
         # Optimizer step
         optimizer.step()
         if scheduler:
+             current_lr = scheduler.get_last_lr()[0] # Get current LR
              scheduler.step() # Step the scheduler
+        else:
+             current_lr = optimizer.param_groups[0]['lr'] # Get LR from optimizer if no scheduler
 
-        total_loss += loss.item()
-        progress_bar.set_postfix({'loss': loss.item()})
+        batch_loss = loss.item()
+        total_loss += batch_loss
+        progress_bar.set_postfix({'loss': batch_loss, 'lr': current_lr})
+
+        # Log metrics to wandb periodically
+        if wandb_run and (global_step + 1) % log_interval == 0:
+            wandb.log({
+                "train_batch_loss": batch_loss,
+                "learning_rate": current_lr,
+                "global_step": global_step + 1 # Log step starting from 1
+            })
 
     progress_bar.close()
     return total_loss / num_batches
@@ -302,7 +317,11 @@ def main():
     for epoch in range(config.NUM_EPOCHS):
         start_time = time.time()
 
-        train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, config.GRAD_CLIP_VALUE, scheduler)
+        # Pass wandb_run and log_interval to train_one_epoch
+        train_loss = train_one_epoch(
+            model, train_loader, optimizer, criterion, device,
+            config.GRAD_CLIP_VALUE, scheduler, epoch, config.LOG_INTERVAL, wandb_run
+        )
         val_loss = evaluate(model, val_loader, criterion, device)
 
         end_time = time.time()
