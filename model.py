@@ -5,7 +5,9 @@ Combines the image encoder and text decoder into a single model.
 import torch
 import torch.nn as nn
 import config
-from encoder import encode_image, get_encoder_output_dim
+# Remove direct dependency on encode_image, get encoder model directly
+# from encoder import encode_image, get_encoder_output_dim
+from transformers import AutoModel # Use AutoModel for flexibility
 from decoder import TransformerDecoder
 
 class ImageToTextModel(nn.Module):
@@ -28,7 +30,17 @@ class ImageToTextModel(nn.Module):
         """
         super().__init__()
 
-        self.encoder_output_dim = get_encoder_output_dim()
+        # --- Load and Freeze Encoder --- 
+        print(f"Loading encoder model: {config.ENCODER_MODEL_NAME}...")
+        self.encoder = AutoModel.from_pretrained(config.ENCODER_MODEL_NAME)
+        # Freeze encoder parameters
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+        self.encoder.eval() # Set encoder to evaluation mode
+        print("Encoder model loaded and frozen.")
+
+        # Get encoder output dimension directly from the loaded model
+        self.encoder_output_dim = self.encoder.config.hidden_size
         self.decoder_embed_dim = decoder_embed_dim
         self.decoder_pad_idx = decoder_pad_idx
 
@@ -51,48 +63,57 @@ class ImageToTextModel(nn.Module):
             pad_idx=decoder_pad_idx
         )
 
-    def forward(self, image_features: torch.Tensor, tgt_tokens: torch.Tensor) -> torch.Tensor:
+    def forward(self, image_tensors: torch.Tensor, tgt_tokens: torch.Tensor) -> torch.Tensor:
         """
         Performs a forward pass for training.
 
         Args:
-            image_features: Pre-encoded image features (Batch Size, Enc Seq Len, Enc Dim).
+            image_tensors: Batch of preprocessed image tensors (Batch Size, C, H, W).
             tgt_tokens: Target token sequences (Batch Size, Target Sequence Length).
-                      These should typically be the ground truth captions/text,
-                      shifted right and padded.
 
         Returns:
             Output logits from the decoder (Batch Size, Target Sequence Length, Vocab Size).
         """
-        # Image features are now passed directly as input.
+        # 1. Encode image tensors using the frozen encoder
+        # Encoder output typically contains last_hidden_state, pooler_output, etc.
+        # We usually need the last_hidden_state for sequence-to-sequence tasks
+        # Or just the CLS token embedding (first token's hidden state) as memory
+        with torch.no_grad(): # Ensure gradients are not computed for the frozen encoder
+             encoder_outputs = self.encoder(pixel_values=image_tensors)
+             # Use the hidden state of the [CLS] token (index 0)
+             # Shape: (Batch Size, Hidden Size)
+             image_features = encoder_outputs.last_hidden_state[:, 0, :]
 
-        # 2. Project encoder features if dimensions don't match
-        memory = self.projection(image_features)
-        # memory shape: (Batch Size, Enc Seq Len, Decoder Embed Dim)
+        # 2. Project encoder features (CLS token embedding)
+        # Input shape: (Batch Size, Enc Dim) -> Output shape: (Batch Size, Dec Embed Dim)
+        memory_cls = self.projection(image_features)
 
-        # 3. Create memory padding mask (if encoder output can be padded)
-        # Assuming no padding from the encoder for now
+        # 3. Unsqueeze memory_cls to match decoder's expected memory format 
+        # Decoder expects memory: (Batch Size, Memory Seq Len, Dec Embed Dim)
+        # Here, our memory sequence length is effectively 1 (just the CLS feature)
+        memory = memory_cls.unsqueeze(1) 
+        # memory shape: (Batch Size, 1, Decoder Embed Dim)
+
+        # 4. Create memory padding mask (no padding needed for single CLS token memory)
         memory_padding_mask = None
-        # If encoder output is padded, mask should be created, e.g.:
-        # memory_padding_mask = torch.zeros(batch_size, enc_seq_len, dtype=torch.bool).to(config.DEVICE)
 
-        # 4. Decode using the target tokens and encoder memory
+        # 5. Decode using the target tokens and projected encoder memory
         logits = self.decoder(
             tgt_tokens=tgt_tokens,
-            memory=memory,
+            memory=memory, # Pass the single-item memory sequence
             memory_padding_mask=memory_padding_mask
         )
 
         return logits
 
-    def generate(self, image, start_token_id: int, end_token_id: int,
+    def generate(self, image_tensor: torch.Tensor, start_token_id: int, end_token_id: int,
                  max_len: int = config.MAX_SEQ_LEN, method: str = 'greedy',
                  beam_size: int = config.BEAM_SIZE) -> list[int]:
         """
-        Generates a sequence of token IDs for a given image during inference.
+        Generates a sequence of token IDs for a given *preprocessed image tensor*.
 
         Args:
-            image: A single PIL image.
+            image_tensor: A single preprocessed image tensor (1, C, H, W).
             start_token_id: The ID of the start token.
             end_token_id: The ID of the end token.
             max_len: Maximum length of the sequence to generate.
@@ -105,16 +126,18 @@ class ImageToTextModel(nn.Module):
         self.eval() # Set model to evaluation mode
 
         with torch.no_grad():
-            # 1. Encode the input image
-            # encode_image returns shape (1, Enc Seq Len, Enc Dim)
-            image_features = encode_image(image)
-            # Shape: (1, Enc Seq Len, Enc Dim)
+            # 1. Encode the input image tensor using self.encoder
+            encoder_outputs = self.encoder(pixel_values=image_tensor.to(config.DEVICE))
+            image_features = encoder_outputs.last_hidden_state[:, 0, :]
+            # Shape: (1, Enc Dim)
 
             # 2. Project encoder features
-            memory = self.projection(image_features)
-            # Shape: (1, Enc Seq Len, Decoder Embed Dim)
+            memory_cls = self.projection(image_features)
+            # Shape: (1, Dec Embed Dim)
+            memory = memory_cls.unsqueeze(1)
+            # Shape: (1, 1, Dec Embed Dim)
 
-            # Handle potential padding in encoder output if any (assuming none for now)
+            # 3. Handle potential padding (none needed for CLS memory)
             memory_padding_mask = None
 
             if method == 'greedy':
@@ -125,7 +148,7 @@ class ImageToTextModel(nn.Module):
                 for _ in range(max_len - 1):
                     # Get decoder output logits for the current sequence
                     # Input tgt_tokens shape: (1, current_len)
-                    # Input memory shape: (1, Enc Seq Len, Dec Embed Dim)
+                    # Input memory shape: (1, 1, Dec Embed Dim)
                     logits = self.decoder(
                         tgt_tokens=generated_ids,
                         memory=memory,
@@ -153,7 +176,7 @@ class ImageToTextModel(nn.Module):
                 # Beam search implementation (more complex)
                 # TODO: Implement beam search decoding
                 print("Beam search not yet implemented. Falling back to greedy.")
-                return self.generate(image, start_token_id, end_token_id, max_len, method='greedy')
+                return self.generate(image_tensor, start_token_id, end_token_id, max_len, method='greedy')
             else:
                 raise ValueError(f"Unsupported generation method: {method}")
 
@@ -176,8 +199,8 @@ if __name__ == '__main__':
     # --- Test forward pass (training simulation) ---
     print("--- Testing forward pass ---")
     batch_size = 4
-    # Dummy images (replace with actual loading)
-    images = [Image.new('RGB', (224, 224)) for _ in range(batch_size)]
+    # Dummy image *tensors* (replace with actual loading/processing)
+    dummy_images_tensor = torch.randn(batch_size, 3, 224, 224, device=config.DEVICE)
     # Dummy target tokens (batch size, seq len)
     # Typically start with <START> and end with <END>, padded
     dummy_tgt = torch.randint(1, config.VOCAB_SIZE, (batch_size, config.MAX_SEQ_LEN), device=config.DEVICE)
@@ -192,18 +215,18 @@ if __name__ == '__main__':
     decoder_input = dummy_tgt[:, :-1] # Exclude last token
     # decoder_target = dummy_tgt[:, 1:] # Exclude first token (<START>)
 
-    # Note: The loss calculation in train.py will handle the alignment
-    # between logits output and the actual target tokens.
-    logits = model(images, decoder_input)
-    print(f"Input images: {len(images)}")
+    # Pass image tensors to the updated forward method
+    logits = model(dummy_images_tensor, decoder_input)
+    print(f"Input image tensor shape: {dummy_images_tensor.shape}")
     print(f"Decoder input shape: {decoder_input.shape}")
     print(f"Output logits shape: {logits.shape}") # Should be (batch_size, seq_len-1, vocab_size)
 
     # --- Test generate method (inference simulation) ---
     print("\n--- Testing generate method (greedy) ---")
-    dummy_image = Image.new('RGB', (224, 224))
+    # Dummy preprocessed image tensor
+    dummy_image_tensor = torch.randn(1, 3, 224, 224, device=config.DEVICE)
     generated_sequence = model.generate(
-        dummy_image,
+        dummy_image_tensor,
         start_token_id=config.START_TOKEN_ID,
         end_token_id=config.END_TOKEN_ID,
         max_len=20 # Generate a short sequence for testing
