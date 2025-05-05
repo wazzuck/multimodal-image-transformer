@@ -178,5 +178,3 @@ if __name__ == '__main__':
     # loaded_tok = SimpleTokenizer.load_vocab(VOCAB_FILE)
     # print("Loaded Vocab Size:", loaded_tok.get_vocab_size())
     # print(loaded_tok.encode("another test"))
-
-</rewritten_file> 

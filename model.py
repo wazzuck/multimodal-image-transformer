@@ -51,12 +51,12 @@ class ImageToTextModel(nn.Module):
             pad_idx=decoder_pad_idx
         )
 
-    def forward(self, images: list, tgt_tokens: torch.Tensor) -> torch.Tensor:
+    def forward(self, image_features: torch.Tensor, tgt_tokens: torch.Tensor) -> torch.Tensor:
         """
         Performs a forward pass for training.
 
         Args:
-            images: A list or batch of PIL images.
+            image_features: Pre-encoded image features (Batch Size, Enc Seq Len, Enc Dim).
             tgt_tokens: Target token sequences (Batch Size, Target Sequence Length).
                       These should typically be the ground truth captions/text,
                       shifted right and padded.
@@ -64,30 +64,7 @@ class ImageToTextModel(nn.Module):
         Returns:
             Output logits from the decoder (Batch Size, Target Sequence Length, Vocab Size).
         """
-        # 1. Encode images (handle batching if necessary)
-        # Assuming encode_image processes one image at a time
-        # We need to batch the encoding process
-        # Note: The encode_image function needs modification to handle batches or we loop here.
-        # For simplicity, let's assume encode_image is updated or we handle batching outside.
-        # If looping: (Inefficient)
-        # image_features_list = [encode_image(img) for img in images]
-        # image_features = torch.cat(image_features_list, dim=0)
-
-        # Let's assume encode_image is adapted for batching later or handled in the dataloader
-        # Placeholder: assume image_features is already batched (Batch Size, Enc Seq Len, Enc Dim)
-        # This needs proper implementation in encoder.py or dataset.py/train.py
-
-        # --- Placeholder for batched image encoding --- #
-        # Example if encode_image handles batches (requires modification in encoder.py)
-        # image_features = encode_image_batch(images) # Fictional function
-
-        # --- Simulate batched encoding for now --- #
-        # This is just for structural correctness, replace with actual batched encoding
-        batch_size = tgt_tokens.size(0)
-        enc_seq_len = 197 # Example ViT
-        image_features = torch.randn(batch_size, enc_seq_len, self.encoder_output_dim).to(config.DEVICE)
-        # --- End Placeholder --- #
-
+        # Image features are now passed directly as input.
 
         # 2. Project encoder features if dimensions don't match
         memory = self.projection(image_features)
