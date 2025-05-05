@@ -27,7 +27,7 @@ def setup_wandb(cfg):
         'decoder_layers': cfg.DECODER_LAYERS,
         'decoder_heads': cfg.DECODER_HEADS,
         'decoder_ff_dim': cfg.DECODER_FF_DIM,
-        'embedding_dim': cfg.EMBEDDING_DIM,
+        'embedding_dim': cfg.DECODER_EMBED_DIM,
         'max_seq_len': cfg.MAX_SEQ_LEN,
         'dropout': cfg.DROPOUT,
         'learning_rate': cfg.LEARNING_RATE,
