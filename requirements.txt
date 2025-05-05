@@ -4,4 +4,5 @@ transformers
 tqdm
 requests
 Pillow
-safetensors 
+safetensors
+huggingface_hub
