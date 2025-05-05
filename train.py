@@ -148,6 +148,9 @@ def main():
     if config.DEVICE == "cuda":
         torch.cuda.manual_seed(config.RANDOM_SEED)
 
+    # --- Wandb Setup ---
+    wandb_run = setup_wandb(config) # <-- Initialize wandb here
+
     # --- Hugging Face Hub Setup ---
     print(f"Attempting to create or use repo: {config.HF_REPO_ID}")
     try:
