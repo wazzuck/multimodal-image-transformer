@@ -29,7 +29,7 @@ def setup_wandb(cfg):
         'decoder_ff_dim': cfg.DECODER_FF_DIM,
         'embedding_dim': cfg.DECODER_EMBED_DIM,
         'max_seq_len': cfg.MAX_SEQ_LEN,
-        'dropout': cfg.DROPOUT,
+        'dropout': cfg.DECODER_DROPOUT,
         'learning_rate': cfg.LEARNING_RATE,
         'epochs': cfg.NUM_EPOCHS,
         'batch_size': cfg.BATCH_SIZE,
