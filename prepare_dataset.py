@@ -162,38 +162,61 @@ def convert_csv_to_json(csv_path, json_path):
     try:
         # Open the CSV file for reading with UTF-8 encoding.
         with open(csv_path, 'r', encoding='utf-8') as csvfile:
-            # Use csv.reader with the pipe delimiter.
-            reader = csv.reader(csvfile, delimiter='|')
+            # Use csv.reader, trying comma as the delimiter first.
+            # csv.QUOTE_MINIMAL handles quotes only when necessary (e.g., if the caption itself contains a comma).
+            reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            header_read = False
+            image_col = -1
+            caption_col = -1
+
+            # Attempt to read the first row as a potential header
             try:
-                # Read the first row, assuming it's the header.
-                header = next(reader)
-                # Clean whitespace from header names for reliable indexing.
-                header = [h.strip() for h in header]
-                # Find the column indices for image name and caption.
-                image_col = header.index("image_name")
-                caption_col = header.index("comment")
-                print(f"Detected header: {header}. Using columns: image={image_col}, caption={caption_col}")
-            # Handle cases where the header is missing or doesn't match expectations.
-            except (StopIteration, ValueError):
-                 print("Warning: Could not read or find expected headers ('image_name', 'comment') with delimiter '|'. Assuming column indices 0 (image) and 2 (caption).")
-                 # Rewind the file reader if the header was read partially or incorrectly.
-                 csvfile.seek(0)
-                 reader = csv.reader(csvfile, delimiter='|') # Re-initialize reader
-                 image_col = 0   # Assume image name is the first column.
-                 caption_col = 2 # Assume caption is the third column.
+                first_row = next(reader)
+                # Simple check for header content
+                if len(first_row) >= 2 and 'image' in first_row[0].lower() and ('caption' in first_row[1].lower() or 'comment' in first_row[1].lower()):
+                    header = [h.strip() for h in first_row]
+                    image_col = 0 # Assume image is first column
+                    caption_col = 1 # Assume caption is second column
+                    print(f"Detected header: {header}. Using columns: image={image_col}, caption={caption_col}")
+                    header_read = True
+                else:
+                     # If the first row doesn't look like a header, assume no header
+                     print("Warning: Did not detect a standard header (e.g., 'image_name,comment'). Assuming column indices 0 (image) and 1 (caption).")
+                     csvfile.seek(0) # Rewind to process the first row as data
+                     reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL) # Re-initialize reader
+                     image_col = 0
+                     caption_col = 1
+            except StopIteration:
+                print("Warning: CSV file appears to be empty.")
+                return False # Cannot proceed with an empty file
+            except Exception as e:
+                print(f"Warning: Error reading the first line or determining delimiter: {e}. Assuming column indices 0 (image) and 1 (caption) with comma delimiter.")
+                csvfile.seek(0) # Rewind
+                reader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL) # Re-initialize reader
+                image_col = 0
+                caption_col = 1
+
 
             # Iterate through each row in the CSV file.
             for i, row in enumerate(reader):
+                # Skip the header row if it was read
+                if header_read and i == 0:
+                     # This condition is actually unnecessary now as the header is read before the loop
+                     # Kept conceptually, but next() already advanced the iterator
+                     pass # Already processed header
+
                 # Basic check for row integrity (has enough columns).
                 if len(row) > max(image_col, caption_col):
                     # Extract image name and caption, stripping leading/trailing whitespace.
                     image_name = row[image_col].strip()
-                    caption = row[caption_col].strip()
+                    # Strip potential quotes and then whitespace from the caption
+                    caption = row[caption_col].strip().strip('"').strip()
 
                     # Skip potentially problematic header-like rows if header detection failed
-                    if image_col == 0 and caption_col == 2 and i == 0 and "image_name" in image_name and "comment" in caption:
-                         print("Skipping likely header row that wasn't detected initially.")
-                         continue
+                    # This check might be less reliable now, remove or adjust if needed
+                    # if image_col == 0 and caption_col == 1 and i == 0 and not header_read and "image" in image_name and "comment" in caption:
+                    #      print("Skipping likely header row that wasn't detected initially.")
+                    #      continue
 
                     # If the image name is not yet a key in the dictionary, add it with an empty list.
                     if image_name not in captions:
@@ -202,7 +225,9 @@ def convert_csv_to_json(csv_path, json_path):
                     captions[image_name].append(caption)
                 else:
                     # Log a warning for rows that don't have the expected number of columns.
-                    print(f"Warning: Skipping malformed row in CSV (line {i+1}): {row}")
+                    # Adding +1 because enumerate starts at 0, +1 if header was read
+                    line_num = i + (1 if header_read else 1)
+                    print(f"Warning: Skipping malformed row in CSV (line ~{line_num}): {row}. Expected at least {max(image_col, caption_col) + 1} columns.")
 
 
         # After processing the CSV, check if any captions were actually extracted.
