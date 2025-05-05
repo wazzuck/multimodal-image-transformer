@@ -129,18 +129,23 @@ class ImageTextDataset(Dataset):
             "caption_tokens": torch.tensor(padded_tokens, dtype=torch.long)
         }
 
-    def _pad_or_truncate(self, tokens: List[int]) -> List[int]:
+    def _pad_or_truncate(self, tokens: Encoding) -> torch.Tensor:
         """Pads or truncates a token list to max_seq_len."""
-        if len(tokens) < self.max_seq_len:
-            # Pad with PAD token ID
-            padded = tokens + [config.PAD_TOKEN_ID] * (self.max_seq_len - len(tokens))
-        else:
-            # Truncate, ensuring END token is kept if present
-            if tokens[self.max_seq_len - 1] == config.END_TOKEN_ID:
-                padded = tokens[:self.max_seq_len]
-            else:
-                padded = tokens[:self.max_seq_len - 1] + [config.END_TOKEN_ID]
-        return padded
+        token_ids = tokens.ids # Get the list of token IDs
+        
+        # Pad if shorter, truncate if longer
+        padded_token_ids = token_ids[:self.max_seq_len]
+
+        # Check if the last token is the end token *after potential truncation*
+        if len(padded_token_ids) == self.max_seq_len and \
+           padded_token_ids[self.max_seq_len - 1] != config.END_TOKEN_ID:
+             # If truncated and last token is not EOS, force it to be EOS
+             padded_token_ids[self.max_seq_len - 1] = config.END_TOKEN_ID
+        elif len(padded_token_ids) < self.max_seq_len:
+            # Pad with PAD token ID if shorter
+            padded_token_ids.extend([config.PAD_TOKEN_ID] * (self.max_seq_len - len(padded_token_ids)))
+
+        return torch.tensor(padded_token_ids, dtype=torch.long)
 
 def collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Custom collate function to handle batching of images and padded sequences."""
