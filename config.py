@@ -3,6 +3,7 @@ Configuration settings for the Multimodal Image Transformer project.
 """
 
 import torch
+import os
 
 # --- General Settings ---
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -47,6 +48,9 @@ PAD_TOKEN_ID = 0 # Ensure these match your tokenizer's vocabulary
 START_TOKEN_ID = 1
 END_TOKEN_ID = 2
 UNK_TOKEN_ID = 3
+
+VOCAB_PATH = os.path.join(OUTPUT_DIR, "vocab.json")
+MERGES_PATH = os.path.join(OUTPUT_DIR, "merges.txt")
 
 # --- Inference Settings ---
 BEAM_SIZE = 3 # Optional: for beam search decoding 
