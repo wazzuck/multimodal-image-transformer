@@ -59,30 +59,32 @@ class ImageTextDataset(Dataset):
 
         # Adapt based on the actual JSON structure
         if isinstance(captions_data, dict):
-            # Assuming { "filename": "caption" }
-            for filename, caption in captions_data.items():
+            # Handle { "filename": ["caption1", "caption2", ...] }
+            for filename, caption_list in captions_data.items():
                 img_path = os.path.join(self.image_dir, filename)
                 if os.path.exists(img_path):
-                    self.image_paths.append(img_path)
-                    self.captions.append(caption)
+                    # Add an entry for each caption in the list
+                    for caption in caption_list:
+                         if isinstance(caption, str): # Ensure caption is a string
+                            self.image_paths.append(img_path)
+                            self.captions.append(caption)
+                         else:
+                            print(f"Warning: Found non-string caption for {filename}: {caption}. Skipping.")
                 else:
                     print(f"Warning: Image file not found: {img_path}")
-        elif isinstance(captions_data, list):
-             # Assuming [{ "image_id": "filename", "caption": "caption"}, ...]
-            for item in captions_data:
-                filename = item.get("image_id")
-                caption = item.get("caption")
-                if filename and caption:
-                    img_path = os.path.join(self.image_dir, filename)
-                    if os.path.exists(img_path):
-                        self.image_paths.append(img_path)
-                        self.captions.append(caption)
-                    else:
-                        print(f"Warning: Image file not found: {img_path}")
-                else:
-                     print(f"Warning: Skipping invalid item in captions file: {item}")
+
+        # Note: The original handling for list format [{ "image_id": "filename", "caption": "caption"}, ...] 
+        # is removed as prepare_dataset.py creates the dict format.
+        # You could add it back with an elif if needed for other caption file formats.
+        # elif isinstance(captions_data, list):
+        #     # Handle [{ "image_id": "filename", "caption": "caption"}, ...]
+        #     ...
+
         else:
-            print("Error: Unsupported captions file format.")
+            print("Error: Captions data is not a dictionary as expected from prepare_dataset.py.")
+
+        if not self.image_paths:
+             print("Error: No valid image-caption pairs were loaded. Check paths and caption file format.")
 
         print(f"Found {len(self.image_paths)} image-caption pairs.")
 
