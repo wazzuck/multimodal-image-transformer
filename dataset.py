@@ -154,11 +154,12 @@ def collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     decoder_input_tokens = caption_tokens[:, :-1]
     target_tokens = caption_tokens[:, 1:]
 
+    # Return tensors on CPU. Move to device in the training loop.
     return {
         "image_paths": image_paths,
-        "images": images.to(config.DEVICE), # Move to device here or in training loop
-        "decoder_input_tokens": decoder_input_tokens.to(config.DEVICE),
-        "target_tokens": target_tokens.to(config.DEVICE)
+        "images": images,
+        "decoder_input_tokens": decoder_input_tokens,
+        "target_tokens": target_tokens
     }
 
 # Example Usage

@@ -8,10 +8,11 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from model import ImageToTextModel
 from dataset import ImageTextDataset, collate_fn
-from tokenizer import get_tokenizer # Use the shared tokenizer instance
+from tokenizer import get_tokenizer, train_tokenizer, get_vocab_size as get_tokenizer_vocab_size
 import config
 import os
 import time
+import json # Needed for loading captions
 from tqdm import tqdm # For progress bar
 import prepare_dataset # Import the new preparation script
 from safetensors.torch import save_file # Import safetensors saving function
@@ -26,8 +27,6 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, grad_clip_v
 
     for batch in progress_bar:
         # Move data to the configured device
-        # Note: Collate function already moves tensors, this might be redundant
-        # depending on where you prefer to handle device placement.
         images = batch["images"].to(device)
         decoder_input_tokens = batch["decoder_input_tokens"].to(device)
         target_tokens = batch["target_tokens"].to(device)
@@ -90,6 +89,7 @@ def evaluate(model, dataloader, criterion, device):
 
     with torch.no_grad(): # Disable gradient calculations
         for batch in progress_bar:
+            # Move data to the configured device
             images = batch["images"].to(device)
             decoder_input_tokens = batch["decoder_input_tokens"].to(device)
             target_tokens = batch["target_tokens"].to(device)
@@ -119,7 +119,6 @@ def main():
     print("Checking and preparing dataset if necessary...")
     prepare_dataset.prepare_flickr30k()
     print("Dataset preparation check complete.")
-    # --- Resume original main function --- #
 
     # Ensure output directory exists
     os.makedirs(config.OUTPUT_DIR, exist_ok=True)
@@ -130,16 +129,66 @@ def main():
     if config.DEVICE == "cuda":
         torch.cuda.manual_seed(config.RANDOM_SEED)
 
-    # --- Tokenizer --- #
-    tokenizer = get_tokenizer()
-    # TODO: Add logic here to train the tokenizer if vocab file wasn't found or is too small
-    # Requires loading text data first
-    actual_vocab_size = tokenizer.get_vocab_size()
-    if actual_vocab_size < config.VOCAB_SIZE:
-        print(f"Warning: Actual vocab size ({actual_vocab_size}) is less than configured ({config.VOCAB_SIZE}).")
-        print("Consider training the tokenizer on your dataset.")
-        # You might need to adjust config.VOCAB_SIZE or train the tokenizer here.
-        # For now, we proceed with the actual size.
+    # --- Tokenizer Training (if needed) --- #
+    print("Checking tokenizer vocabulary...")
+    if not os.path.exists(config.VOCAB_PATH) or not os.path.exists(config.MERGES_PATH):
+        print(f"Tokenizer vocabulary not found at {config.VOCAB_PATH} or {config.MERGES_PATH}.")
+        print("Attempting to train tokenizer...")
+
+        # Load captions data directly for training the tokenizer
+        try:
+            with open(config.CAPTIONS_FILE, 'r', encoding='utf-8') as f:
+                captions_data = json.load(f)
+            # Extract just the caption strings
+            all_captions = []
+            if isinstance(captions_data, dict):
+                 for caption_list in captions_data.values():
+                      if isinstance(caption_list, list):
+                          all_captions.extend(caption_list)
+                      elif isinstance(caption_list, str): # Handle case where value is string, not list
+                          all_captions.append(caption_list)
+            else:
+                 print(f"Warning: captions file format not the expected dict. Cannot train tokenizer from {config.CAPTIONS_FILE}")
+            
+            if not all_captions:
+                print("Error: No captions found to train tokenizer. Please check captions file.")
+                return # Cannot proceed without captions
+
+            # Train the tokenizer
+            train_tokenizer(
+                iter(all_captions), # Pass iterator
+                vocab_size=config.VOCAB_SIZE,
+                vocab_path=config.VOCAB_PATH,
+                merges_path=config.MERGES_PATH
+            )
+            print("Tokenizer training finished.")
+
+        except FileNotFoundError:
+            print(f"Error: Cannot train tokenizer because captions file not found at {config.CAPTIONS_FILE}")
+            return
+        except Exception as e:
+            print(f"Error during tokenizer training: {e}")
+            return
+    else:
+        print("Found existing tokenizer vocabulary files.")
+
+    # --- Load Tokenizer and Check Vocab Size --- #
+    try:
+        tokenizer = get_tokenizer() # Now loads the potentially trained tokenizer
+        actual_vocab_size = get_tokenizer_vocab_size() # Use the specific function
+        print(f"Tokenizer loaded. Actual vocab size: {actual_vocab_size}")
+        # Optional: Check against config.VOCAB_SIZE, though BPE might not reach exact size
+        if actual_vocab_size < 5: # Check for minimal reasonable size
+             print("Warning: Loaded tokenizer vocab size seems very small.")
+
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+        print("Cannot proceed without a valid tokenizer.")
+        return
+    except Exception as e:
+        print(f"Error loading tokenizer: {e}")
+        return
+
     effective_vocab_size = actual_vocab_size # Use the actual size for the model
 
     # --- Dataset and Dataloaders --- #
