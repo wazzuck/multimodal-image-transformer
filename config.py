@@ -10,9 +10,9 @@ RANDOM_SEED = 42
 
 # --- Data Settings ---
 # Adjust these paths based on your dataset structure
-DATA_DIR = "data" # Directory containing images and caption file
-IMAGE_DIR = f"{DATA_DIR}/images/"
-CAPTIONS_FILE = f"{DATA_DIR}/captions.json" # Example: JSON file mapping image filenames to captions
+DATA_DIR = "assets" # Root directory for prepared dataset assets
+IMAGE_DIR = f"{DATA_DIR}/images" # Images subdirectory
+CAPTIONS_FILE = f"{DATA_DIR}/captions.json" # Captions JSON file
 OUTPUT_DIR = "outputs" # Directory to save checkpoints and logs
 
 # --- Model Settings ---
