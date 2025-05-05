@@ -1,0 +1,7 @@
+torch>=1.8.0
+torchvision>=0.9.0
+transformers>=4.10.0
+Pillow>=8.0.0
+numpy>=1.19.0
+# Add other specific dependencies if needed, e.g., for tokenizers
+# tokenizers>=0.10.0 
