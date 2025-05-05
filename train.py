@@ -31,7 +31,7 @@ def setup_wandb(cfg):
         'max_seq_len': cfg.MAX_SEQ_LEN,
         'dropout': cfg.DROPOUT,
         'learning_rate': cfg.LEARNING_RATE,
-        'epochs': cfg.EPOCHS,
+        'epochs': cfg.NUM_EPOCHS,
         'batch_size': cfg.BATCH_SIZE,
         'vocab_size': cfg.VOCAB_SIZE, # Log vocab size after tokenizer setup
         'warmup_steps': cfg.WARMUP_STEPS,
@@ -305,7 +305,7 @@ def main():
 
     # --- Scheduler (Optional) ---
     if config.WARMUP_STEPS > 0:
-        num_training_steps = len(train_loader) * config.EPOCHS
+        num_training_steps = len(train_loader) * config.NUM_EPOCHS
         scheduler = get_linear_schedule_with_warmup(
             optimizer,
             num_warmup_steps=config.WARMUP_STEPS,
