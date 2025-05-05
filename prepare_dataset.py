@@ -334,16 +334,16 @@ def prepare_flickr30k():
     # --- Step 4: Move Images to final location ---
     print(f"--- Step 4: Moving images to {IMAGE_DIR} ---")
     # Define potential source directories for images within the extracted files.
-    source_image_dir_option1 = EXTRACT_DIR / "images"      # e.g., flickr30k_extracted/images/
+    source_image_dir_option1 = EXTRACT_DIR / "Images"      # Check for 'Images' (uppercase I) based on ls output
     source_image_dir_option2 = EXTRACT_DIR                 # e.g., flickr30k_extracted/
     actual_source_dir = None # Will store the directory where images are actually found.
 
-    # Check if the 'images' subdirectory exists.
+    # Check if the 'Images' subdirectory exists.
     if source_image_dir_option1.is_dir():
         actual_source_dir = source_image_dir_option1
         print(f"Found images in standard subdirectory: {actual_source_dir}")
     else:
-        # If 'images' subdirectory not found, check for image files directly in EXTRACT_DIR.
+        # If 'Images' subdirectory not found, check for image files directly in EXTRACT_DIR.
         print(f"Did not find standard subdirectory {source_image_dir_option1}. Checking base extraction directory {source_image_dir_option2}...")
         image_files_found_in_base = False
         try:
@@ -392,25 +392,25 @@ def prepare_flickr30k():
 
     # --- Step 5: Convert Captions (CSV to JSON) ---
     print(f"--- Step 5: Converting captions CSV to JSON ({CAPTIONS_JSON_PATH}) ---")
-    # Define the expected path for the captions CSV file within the extracted data.
-    # This might need adjustment if the filename or location in the zip differs.
-    extracted_csv_path = EXTRACT_DIR / "results.csv"
-    print(f"Looking for captions CSV at: {extracted_csv_path}")
+    # Define the expected path for the captions file within the extracted data.
+    # Based on ls output, the file is captions.txt
+    extracted_captions_path = EXTRACT_DIR / "captions.txt"
+    print(f"Looking for captions file at: {extracted_captions_path}")
 
-    # Check if the expected CSV file exists.
-    if extracted_csv_path.is_file():
-        # Attempt to convert the found CSV to the target JSON format.
-        if not convert_csv_to_json(extracted_csv_path, CAPTIONS_JSON_PATH):
+    # Check if the expected captions file exists.
+    if extracted_captions_path.is_file():
+        # Attempt to convert the found captions file to the target JSON format.
+        # Assuming captions.txt has the same format as results.csv (pipe-delimited)
+        if not convert_csv_to_json(extracted_captions_path, CAPTIONS_JSON_PATH):
              # If conversion fails, log a warning. The dataset might be usable without captions,
              # or this might indicate a critical failure depending on the use case.
              print("Warning: Caption conversion failed. The final dataset might be incomplete or lack captions.")
              # Decide if we should clean up and exit based on severity
     else:
-        # If the CSV file wasn't found where expected.
-        print(f"Warning: Captions CSV file not found after extraction at expected path: {extracted_csv_path}")
+        # If the captions file wasn't found where expected.
+        print(f"Warning: Captions file not found after extraction at expected path: {extracted_captions_path}")
         print(f"Cannot create {CAPTIONS_JSON_PATH}. Please ensure the captions file exists manually or check the archive contents.")
 
-    """
     # --- Step 6: Clean up temporary files ---
     print(f"--- Step 6: Cleaning up temporary download/extraction files in {DOWNLOAD_DIR} ---")
     try:
@@ -421,7 +421,6 @@ def prepare_flickr30k():
     # Handle errors that might occur during cleanup (e.g., files in use, permissions).
     except OSError as e:
         print(f"Warning: Error removing temporary directory {DOWNLOAD_DIR}: {e}")
-    """
     print("--- Flickr30k Preparation Process Complete --- ")
     # Final check to inform the user if essential parts seem missing
     if not IMAGE_DIR.is_dir() or not any(IMAGE_DIR.iterdir()):
