@@ -59,9 +59,9 @@ START_TOKEN_ID = 1
 END_TOKEN_ID = 2
 UNK_TOKEN_ID = 3
 
-# Corrected Tokenizer paths relative to the assumed parent directory
-VOCAB_PATH = "/workspace/assets/multimodal_image_transformer/vocab.json" # Where the tokenizer vocab is saved/loaded
-MERGES_PATH = "/workspace/assets/multimodal_image_transformer/merges.txt" # Where the tokenizer merges are saved/loaded
+# Tokenizer paths relative to OUTPUT_DIR (which is DATA_DIR)
+VOCAB_PATH = OUTPUT_DIR + "vocab.json" # Where the tokenizer vocab is saved/loaded
+MERGES_PATH = OUTPUT_DIR + "merges.txt" # Where the tokenizer merges are saved/loaded
 
 # --- Wandb Configuration ---
 WANDB_PROJECT = "multimodal-image-transformer" # Your project name
