@@ -55,17 +55,18 @@ The model follows a standard Encoder-Decoder architecture:
 
 The model is configured to use the Flickr30k dataset.
 
-*   **Automatic Download:** When you run the training script (`train.py`) for the first time, it will automatically check if the dataset exists in the `./data` directory.
-    *   If the dataset (specifically `./data/images/` and `./data/captions.json`) is not found, the script `prepare_dataset.py` will automatically:
-        1.  Download the Flickr30k dataset (images and captions CSV) from [awsaf49/flickr-dataset](https://github.com/awsaf49/flickr-dataset) (approx. 4.4 GB compressed).
-        2.  Extract the images into `./data/images/`.
-        3.  Convert the caption data from the original CSV format into `./data/captions.json` (mapping image filenames to lists of captions).
+*   **Automatic Download:** When you run the training script (`train.py`) for the first time, it will automatically check if the dataset exists in the directory specified by `DATA_DIR` in `config.py` (defaulting to `../assets/multimodal_image_transformer/` relative to the project root).
+    *   If the dataset (specifically the images directory, e.g., `../assets/multimodal_image_transformer/images/`, and the captions file, e.g., `../assets/multimodal_image_transformer/captions.json`) is not found, the script `prepare_dataset.py` (which reads its paths from `config.py`) will automatically:
+        1.  Download the Flickr30k dataset (images and captions CSV) from [awsaf49/flickr-dataset](https://github.com/awsaf49/flickr-dataset) (approx. 4.4 GB compressed) into a temporary subfolder within your `DATA_DIR`.
+        2.  Extract the images into the `images/` subdirectory within your `DATA_DIR` (e.g., `../assets/multimodal_image_transformer/images/`).
+        3.  Convert the caption data from the original CSV format into `captions.json` within your `DATA_DIR` (e.g., `../assets/multimodal_image_transformer/captions.json`).
         4.  Clean up temporary download files.
     *   This process requires the `requests` library (included in `requirements.txt`) and an internet connection. It may take a significant amount of time depending on your connection speed.
 *   **Manual Setup (Optional):** If you prefer to download the data manually or use a different dataset, you will need to:
-    1.  Place your image files in `./data/images/`.
-    2.  Create a `./data/captions.json` file mapping your image filenames to a list of their corresponding captions. The structure should be: `{"image1.jpg": ["caption A", "caption B"], "image2.jpg": ["caption C"], ...}`.
-    3.  You might need to adapt `dataset.py` if your data format or structure differs significantly.
+    1.  Ensure `config.py` has `DATA_DIR` and `IMAGE_DIR` pointing to your desired locations.
+    2.  Place your image files in the directory specified by `IMAGE_DIR` (e.g., `../assets/multimodal_image_transformer/images/`).
+    3.  Create a captions file (e.g., `captions.json`) in the location specified by `CAPTIONS_FILE` in `config.py` (e.g., `../assets/multimodal_image_transformer/captions.json`). This file should map your image filenames to a list of their corresponding captions. The structure should be: `{"image1.jpg": ["caption A", "caption B"], "image2.jpg": ["caption C"], ...}`.
+    4.  You might need to adapt `dataset.py` if your data format or structure differs significantly.
 
 ## Usage
 
@@ -116,7 +117,7 @@ The model is configured to use the Flickr30k dataset.
     python train.py
     ```
     *   The first time you run this, it will attempt to download and prepare the Flickr30k dataset automatically (see Dataset Setup section).
-    *   Checkpoints will be saved in the directory specified by `OUTPUT_DIR` in `config.py` (defaults to `./assets` after the last change).
+    *   Checkpoints will be saved in the directory specified by `OUTPUT_DIR` in `config.py` (which defaults to the same path as `DATA_DIR`, e.g., `../assets/multimodal_image_transformer/`).
     *   If you logged into Hugging Face Hub, checkpoints (`.safetensors` files) will be automatically uploaded to the specified `HF_REPO_ID` at the end of each epoch.
 
 4.  **Inference:**
@@ -127,11 +128,19 @@ The model is configured to use the Flickr30k dataset.
 
 ## File Structure
 
+The project structure is organized as follows. Note that paths for data, tokenizer files, and outputs are now primarily managed through `config.py`.
+
+**Important Note on Data Paths:** The default `DATA_DIR` in `config.py` is set to `"../assets/multimodal_image_transformer/"`. This means the `assets` directory is expected to be a **sibling** to your project directory, not inside it. For example, if your project is at `/home/user/multimodal-image-transformer/`, the data will be stored in `/home/user/assets/multimodal_image_transformer/`.
+
+If you clone the repository, you might need to create the `../assets/` directory yourself adjacent to your cloned project folder, or adjust `DATA_DIR` in `config.py` to point to a different location (e.g., `./data/` to keep it within the project).
+
+The structure *within* the `DATA_DIR` (once resolved) is typically:
+
 ```
-.
+. (Project Root: e.g., /home/user/your_project_name/)
 ├── README.md               # This file
 ├── requirements.txt        # Python dependencies
-├── config.py               # Configuration settings and hyperparameters
+├── config.py               # Configuration settings, hyperparameters, and DATA PATHS
 ├── encoder.py              # Loads image encoder and extracts features
 ├── decoder.py              # Implements the Transformer Decoder
 ├── model.py                # Combines encoder and decoder modules
@@ -139,10 +148,17 @@ The model is configured to use the Flickr30k dataset.
 ├── dataset.py              # Loads and preprocesses image-text data
 ├── train.py                # Script for model training
 ├── inference.py            # Script for generating text from an image
+├── prepare_dataset.py      # Script to download and prepare the dataset (uses config.py for paths)
 ├── utils.py                # Utility functions (e.g., positional encoding)
-└── data/                   # Directory for dataset
-    ├── images/             # Image files (automatically downloaded)
-    └── captions.json       # Caption data (automatically downloaded & converted)
-└── outputs/                # Directory for saved models/results
-└── temp_download/          # Temporary directory used during dataset download (removed after)
-``` 
+
+# Default location for data, models, etc. (sibling to project root by default):
+# ../assets/multimodal_image_transformer/
+#  ├── images/             
+#  ├── captions.json       
+#  ├── vocab.json          
+#  ├── merges.txt          
+#  ├── model_checkpoint_epoch_X.safetensors 
+#  └── temp_download/      (Temporary, removed after dataset prep)
+```
+
+*The diagram above shows the project files. The data files (images, captions, etc.) will be located relative to the project root as specified by `DATA_DIR` in `config.py` (defaulting to one level up, then into `assets/multimodal_image_transformer/`).*
