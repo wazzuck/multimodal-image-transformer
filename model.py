@@ -7,7 +7,7 @@ import torch.nn as nn
 import config
 # Remove direct dependency on encode_image, get encoder model directly
 # from encoder import encode_image, get_encoder_output_dim
-from transformers import AutoModel # Use AutoModel for flexibility
+from transformers import AutoModel, AutoFeatureExtractor # <-- Import AutoFeatureExtractor
 from decoder import TransformerDecoder
 
 class ImageToTextModel(nn.Module):
@@ -32,14 +32,17 @@ class ImageToTextModel(nn.Module):
 
         # --- Load and Freeze Encoder --- 
         print(f"Loading encoder model: {config.ENCODER_MODEL_NAME}...")
+        # Load both the model and its feature extractor
         self.encoder = AutoModel.from_pretrained(config.ENCODER_MODEL_NAME)
+        self.feature_extractor = AutoFeatureExtractor.from_pretrained(config.ENCODER_MODEL_NAME)
+
         # Freeze encoder parameters
         for param in self.encoder.parameters():
             param.requires_grad = False
-        self.encoder.eval() # Set encoder to evaluation mode
+        self.encoder.eval()
         print("Encoder model loaded and frozen.")
 
-        # Get encoder output dimension directly from the loaded model
+        # Determine encoder output dimension directly from the loaded model's config
         self.encoder_output_dim = self.encoder.config.hidden_size
         self.decoder_embed_dim = decoder_embed_dim
         self.decoder_pad_idx = decoder_pad_idx
@@ -106,79 +109,83 @@ class ImageToTextModel(nn.Module):
 
         return logits
 
-    def generate(self, image_tensor: torch.Tensor, start_token_id: int, end_token_id: int,
-                 max_len: int = config.MAX_SEQ_LEN, method: str = 'greedy',
-                 beam_size: int = config.BEAM_SIZE) -> list[int]:
+    def generate(self, image, start_token_id, end_token_id, max_len=100, method='greedy', beam_size=3):
         """
-        Generates a sequence of token IDs for a given *preprocessed image tensor*.
+        Generates text for a given PIL image.
 
         Args:
-            image_tensor: A single preprocessed image tensor (1, C, H, W).
-            start_token_id: The ID of the start token.
-            end_token_id: The ID of the end token.
-            max_len: Maximum length of the sequence to generate.
-            method: Decoding method ('greedy' or 'beam').
-            beam_size: Beam width if using beam search.
+            image: A PIL Image object.
+            start_token_id: The ID of the START token.
+            end_token_id: The ID of the END token.
+            max_len: Maximum length of the generated sequence.
+            method: 'greedy' or 'beam' search.
+            beam_size: Beam width if method is 'beam'.
 
         Returns:
             A list of generated token IDs.
         """
-        self.eval() # Set model to evaluation mode
+        self.eval() # Ensure model is in eval mode
+        device = next(self.parameters()).device # Get model's device
 
-        with torch.no_grad():
-            # 1. Encode the input image tensor using self.encoder
-            encoder_outputs = self.encoder(pixel_values=image_tensor.to(config.DEVICE))
-            image_features = encoder_outputs.last_hidden_state[:, 0, :]
-            # Shape: (1, Enc Dim)
+        # Preprocess the image using the feature extractor
+        inputs = self.feature_extractor(images=image, return_tensors="pt").to(device) # <-- Preprocess image
+        pixel_values = inputs['pixel_values'] # Extract pixel values tensor
 
-            # 2. Project encoder features
-            memory_cls = self.projection(image_features)
-            # Shape: (1, Dec Embed Dim)
-            memory = memory_cls.unsqueeze(1)
-            # Shape: (1, 1, Dec Embed Dim)
+        # Encode the preprocessed image
+        # No need to move pixel_values again, it's already on the correct device
+        with torch.no_grad(): # Wrap encoder call in no_grad during generation
+            encoder_outputs = self.encoder(pixel_values=pixel_values)
+        encoder_features = encoder_outputs.last_hidden_state[:, 0, :] # Shape: [1, Hidden Size]
 
-            # 3. Handle potential padding (none needed for CLS memory)
-            memory_padding_mask = None
+        # Project encoder features
+        # Input shape: (1, Enc Dim) -> Output shape: (1, Dec Embed Dim)
+        memory_cls = self.projection(encoder_features)
 
-            if method == 'greedy':
-                # Initialize the sequence with the start token
-                # Shape: (1, 1)
-                generated_ids = torch.tensor([[start_token_id]], dtype=torch.long, device=config.DEVICE)
+        # Unsqueeze memory_cls to match decoder's expected memory format
+        # memory shape: (1, 1, Decoder Embed Dim)
+        memory = memory_cls.unsqueeze(1)
 
-                for _ in range(max_len - 1):
-                    # Get decoder output logits for the current sequence
-                    # Input tgt_tokens shape: (1, current_len)
-                    # Input memory shape: (1, 1, Dec Embed Dim)
-                    logits = self.decoder(
-                        tgt_tokens=generated_ids,
-                        memory=memory,
-                        memory_padding_mask=memory_padding_mask
-                    )
-                    # Logits shape: (1, current_len, Vocab Size)
+        # Create memory padding mask (no padding needed for single CLS token memory)
+        memory_padding_mask = None
 
-                    # Get the logits for the last predicted token
-                    last_logits = logits[:, -1, :] # Shape: (1, Vocab Size)
+        # Initialize the decoder input sequence with the START token
+        decoder_input_ids = torch.tensor([[start_token_id]], dtype=torch.long, device=device)
 
-                    # Find the token with the highest probability (greedy)
-                    next_token_id = torch.argmax(last_logits, dim=-1).unsqueeze(1) # Shape: (1, 1)
+        # --- Greedy Search ---
+        if method == 'greedy':
+            for _ in range(max_len - 1): # Max_len includes START token
+                # Get decoder output logits for the current sequence
+                # Target mask is usually not needed for generation if causal mask is built-in
+                output_logits = self.decoder(
+                    tgt_tokens=decoder_input_ids,
+                    memory=memory, # Pass the single-item memory sequence
+                    memory_padding_mask=memory_padding_mask
+                ) # [1, CurrentSeqLen, VocabSize]
 
-                    # Append the predicted token ID to the sequence
-                    generated_ids = torch.cat([generated_ids, next_token_id], dim=1)
-                    # Shape: (1, current_len + 1)
+                # Get the predicted token ID for the next step (last token logits)
+                next_token_logits = output_logits[:, -1, :] # [1, VocabSize]
+                next_token_id = torch.argmax(next_token_logits, dim=-1).unsqueeze(0) # [1, 1]
 
-                    # Stop if end token is generated
-                    if next_token_id.item() == end_token_id:
-                        break
+                # Append the predicted token ID to the sequence
+                decoder_input_ids = torch.cat([decoder_input_ids, next_token_id], dim=1)
 
-                return generated_ids.squeeze(0).tolist()
+                # Stop if END token is generated
+                if next_token_id.item() == end_token_id:
+                    break
+            # Return generated sequence (excluding START token if desired, but often kept)
+            return decoder_input_ids[0].cpu().tolist()
 
-            elif method == 'beam':
-                # Beam search implementation (more complex)
-                # TODO: Implement beam search decoding
-                print("Beam search not yet implemented. Falling back to greedy.")
-                return self.generate(image_tensor, start_token_id, end_token_id, max_len, method='greedy')
-            else:
-                raise ValueError(f"Unsupported generation method: {method}")
+        # --- Beam Search (Simplified Example) ---
+        elif method == 'beam':
+             # Beam search implementation is more complex and omitted here for brevity.
+             # It involves maintaining multiple candidate sequences (beams) and their scores.
+             print("Beam search not fully implemented in this example.")
+             # Fallback to greedy for now
+             # You would typically use libraries like huggingface transformers generate for robust beam search
+             return self.generate(image, start_token_id, end_token_id, max_len=max_len, method='greedy')
+
+        else:
+            raise ValueError(f"Unsupported generation method: {method}")
 
 # Example Usage
 if __name__ == '__main__':

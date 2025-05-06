@@ -12,9 +12,9 @@ RANDOM_SEED = 42
 # --- Data Settings ---
 # Adjust these paths based on your dataset structure
 DATA_DIR = "assets" # Root directory for prepared dataset assets
-IMAGE_DIR = f"{DATA_DIR}/images" # Images subdirectory
-CAPTIONS_FILE = f"{DATA_DIR}/captions.json" # Captions JSON file
-OUTPUT_DIR = "assets" # Directory to save checkpoints and logs
+IMAGE_DIR = "../assets/flickr30k_images/flickr30k_images"  # Path to your image directory
+CAPTIONS_FILE = "../assets/captions.json"  # Path to your captions file (JSON format expected)
+OUTPUT_DIR = "output"  # Directory to save checkpoints, tokenizer, etc.
 
 # --- Model Settings ---
 # Choose the pre-trained image encoder model
@@ -44,7 +44,7 @@ WARMUP_STEPS = 0 # Number of warmup steps for scheduler (0 for no warmup)
 
 LOG_INTERVAL = 50 # Log training loss every N batches
 VALIDATION_INTERVAL = 1 # Run validation every N epochs
-CHECKPOINT_PREFIX = "model" # Prefix for saved checkpoint filenames
+CHECKPOINT_PREFIX = "model_checkpoint" # Prefix for saved checkpoint filenames
 
 # --- Tokenizer Settings ---
 # Special tokens (adjust based on your tokenizer)
@@ -58,8 +58,9 @@ START_TOKEN_ID = 1
 END_TOKEN_ID = 2
 UNK_TOKEN_ID = 3
 
-VOCAB_PATH = os.path.join(OUTPUT_DIR, "vocab.json")
-MERGES_PATH = os.path.join(OUTPUT_DIR, "merges.txt")
+# Corrected Tokenizer paths relative to the assumed parent directory
+VOCAB_PATH = "../assets/multimodal_image_transformer/vocab.json" # Where the tokenizer vocab is saved/loaded
+MERGES_PATH = "../assets/multimodal_image_transformer/merges.txt" # Where the tokenizer merges are saved/loaded
 
 # --- Wandb Configuration ---
 WANDB_PROJECT = "multimodal-image-transformer" # Your project name
