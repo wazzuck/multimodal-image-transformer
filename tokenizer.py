@@ -1,6 +1,170 @@
 """
-Handles text tokenization using Byte-Pair Encoding (BPE)
-and vocabulary management. Uses the Hugging Face `tokenizers` library.
+This module implements a text tokenizer using Byte-Pair Encoding (BPE), a subword tokenization algorithm that:
+- Starts with individual characters as tokens
+- Iteratively merges the most frequent adjacent token pairs into new tokens
+- Creates a vocabulary of subword units that can represent any word
+- Handles unknown words by breaking them into known subword units
+
+The implementation uses Hugging Face's `tokenizers` library and provides:
+- Training a BPE tokenizer from a corpus of text (captions).
+- Saving the trained tokenizer's vocabulary (`vocab.json`) and merge rules (`merges.txt`).
+  The paths for these files are typically defined in `config.VOCAB_PATH` and `config.MERGES_PATH`.
+
+  Detailed File Descriptions:
+
+  1.  **`vocab.json` (Vocabulary File)**
+
+      ```text
+      +-----------------------------------------------------------------------------+
+      | File: vocab.json                                                            |
+      +-----------------------------------------------------------------------------+
+      |                                                                             |
+      |  Purpose:                                                                   |
+      |  --------                                                                   |
+      |  Stores the mapping between each unique token (subword unit or special      |
+      |  token) in the tokenizer's vocabulary and its corresponding integer ID.     |
+      |  This is the core dictionary used for converting text to numerical input    |
+      |  for a model and vice-versa.                                                |
+      |                                                                             |
+      |  Format:                                                                    |
+      |  -------                                                                    |
+      |  A JSON object (a dictionary).                                              |
+      |  - Keys are the tokens (strings).                                           |
+      |  - Values are their assigned integer IDs (integers).                        |
+      |                                                                             |
+      |  Example Content Snippet:                                                   |
+      |  ------------------------                                                   |
+      |  {                                                                          |
+      |    "<s>": 0,           // Special token (e.g., START_TOKEN)                  |
+      |    "</s>": 1,          // Special token (e.g., END_TOKEN)                   |
+      |    "<pad>": 2,         // Special token (e.g., PAD_TOKEN)                    |
+      |    "<unk>": 3,         // Special token (e.g., UNK_TOKEN)                    |
+      |    "a": 4,             // Individual character token                       |
+      |    "b": 5,                                                                  |
+      |    "c": 6,                                                                  |
+      |    "Ġthe": 256,        // Subword unit (often starts with 'Ġ' for space)     |
+      |    "Ġcat": 257,                                                              |
+      |    "Ġsat": 258,                                                              |
+      |    "Ġon": 259,                                                               |
+      |    "Ġmat": 260,                                                              |
+      |    "Ġin": 261,                                                               |
+      |    "Ġand": 262,                                                              |
+      |    "Ġth": 263,         // Merged pair 't' + 'h'                            |
+      |    "er": 264,          // Merged pair 'e' + 'r'                            |
+      |    "Ġthem": 265,       // Merged pair 'Ġthe' + 'm'                         |
+      |    ...                                                                      |
+      |    "Ġcomfortable": 1023                                                    |
+      |  }                                                                          |
+      |                                                                             |
+      |  Used For:                                                                  |
+      |  ---------                                                                  |
+      |  - Encoding: Looking up the ID for each token in a piece of text.           |
+      |  - Decoding: Looking up the token string for each ID in a sequence.         |
+      |  - Determining vocabulary size.                                             |
+      |                                                                             |
+      +-----------------------------------------------------------------------------+
+      ```
+
+  2.  **`merges.txt` (Merge Rules File)**
+
+      ```text
+      +-----------------------------------------------------------------------------+
+      | File: merges.txt                                                            |
+      +-----------------------------------------------------------------------------+
+      |                                                                             |
+      |  Purpose:                                                                   |
+      |  --------                                                                   |
+      |  Stores the ordered list of merge operations learned by the BPE algorithm   |
+      |  during training. Each line represents a pair of existing tokens that were  |
+      |  merged to form a new, more frequent token. The order is crucial as it      |
+      |  defines how new text is tokenized by applying these merges iteratively.    |
+      |                                                                             |
+      |  Format:                                                                    |
+      |  -------                                                                    |
+      |  A plain text file.                                                         |
+      |  - Each line contains a pair of tokens (strings) separated by a space.      |
+      |  - The order of lines indicates the order in which merges were learned      |
+      |    (and should be applied). The most frequent pairs are merged first.       |
+      |  - The first line is usually a comment specifying the BPE version (e.g.,    |
+      |    `#version: 0.2`).                                                       |
+      |                                                                             |
+      |  Example Content Snippet:                                                   |
+      |  ------------------------                                                   |
+      |  #version: 0.2                                                              |
+      |  Ġ t                                                                        |
+      |  h e                                                                        |
+      |  Ġth e                                  // Merges "Ġt" and "h" to form "Ġth"  |
+      |  a n                                    // Merges "h" and "e" to form "he"    |
+      |  Ġthe n                                 // Merges "Ġth" and "e" to form "Ġthe"|
+      |  c a                                                                        |
+      |  a t                                                                        |
+      |  Ġca t                                                                      |
+      |  s a                                                                        |
+      |  a t                                                                        |
+      |  Ġsa t                                                                      |
+      |  o n                                                                        |
+      |  Ġo n                                                                       |
+      |  m a                                                                        |
+      |  a t                                                                        |
+      |  Ġma t                                                                      |
+      |  ...                                                                        |
+      |  Ġ comfort                                                                  |
+      |  a ble                                                                      |
+      |  Ġcomfort able                                                              |
+      |                                                                             |
+      |  Used For:                                                                  |
+      |  ---------                                                                  |
+      |  - Tokenization (Encoding): When tokenizing new text, the BPE algorithm     |
+      |    starts with individual characters and iteratively applies these merge    |
+      |    rules (in the order they appear in this file) to combine adjacent pairs  |
+      |    into the subword units present in `vocab.json`.                          |
+      |  - Reconstructing the learned BPE model.                                    |
+      |                                                                             |
+      +-----------------------------------------------------------------------------+
+      ```
+
+- Loading a pre-trained tokenizer from the `vocab.json` and `merges.txt` files.
+- Encoding text into token IDs and decoding token IDs back to text.
+- Automatic addition of special tokens (e.g., START, END) via BertProcessing.
+- Padding and truncation of sequences to a fixed length (config.MAX_SEQ_LEN).
+- Management of a global tokenizer instance for efficient access.
+
+File I/O Flow:
+
+  Training Phase:
+  ===============
+
+    Input Text Data (captions_iterator)
+              |
+              v
+    +---------------------+
+    | Tokenizer Training  |
+    | (train_tokenizer)   |
+    +---------------------+
+              |         |
+              v         v
+    config.VOCAB_PATH   config.MERGES_PATH
+    (e.g., vocab.json)  (e.g., merges.txt)
+         (output)          (output)
+
+
+  Loading/Usage Phase:
+  ====================
+
+    config.VOCAB_PATH   config.MERGES_PATH
+    (e.g., vocab.json)  (e.g., merges.txt)
+         (input)           (input)
+              |         |
+              v         v
+    +---------------------+
+    | Tokenizer Loading   |
+    | (get_tokenizer)     |
+    +---------------------+
+              |
+              v
+    Loaded Tokenizer Instance
+       (for encoding/decoding text)
+
 """
 
 import config # Project configuration file for paths and special tokens.
@@ -152,7 +316,7 @@ def get_tokenizer(force_reload: bool = False):
 
     print("Tokenizer loaded and configured (post-processing, padding, truncation).")
     _tokenizer_instance = tokenizer # Cache the loaded instance.
-    return tokenizer_instance
+    return _tokenizer_instance
 
 # --- Helper functions to use the global tokenizer instance --- 
 # These provide a simpler interface and ensure the tokenizer is loaded.
@@ -200,6 +364,10 @@ if __name__ == '__main__':
         "Maybe the mat is comfortable for the cat.",
         "The cat sleeps on the mat all day."
     ]
+    print("\n--- 0. Dummy Captions for Training ---")
+    for i, caption in enumerate(dummy_captions_for_training):
+        print(f"Caption {i+1}: '{caption}'")
+
     dummy_target_vocab_size = 50 # A small vocab size for quick testing.
     # Define paths for dummy tokenizer files (will be created in the current directory).
     # These override paths from config.py for this local test.
@@ -254,6 +422,13 @@ if __name__ == '__main__':
     print(f"Encoded IDs (from Encoding object):    {encoded_ids_from_result}")
     print(f"Attention Mask (from Encoding object): {attention_mask_from_result}")
     print(f"Length of IDs: {len(encoded_ids_from_result)} (should be <= MAX_SEQ_LEN={config.MAX_SEQ_LEN})")
+    print(f"Full Encoding Result Object:")
+    print(f"  - IDs: {encoding_result.ids}")
+    print(f"  - Tokens: {encoding_result.tokens}")
+    print(f"  - Attention Mask: {encoding_result.attention_mask}")
+    print(f"  - Special Tokens Mask: {encoding_result.special_tokens_mask}")
+    print(f"  - Type IDs: {encoding_result.type_ids}")
+    print(f"  - Offsets: {encoding_result.offsets}")
 
     # Test decoding helper function.
     decoded_text_no_skip = decode_ids(encoded_ids_from_result, skip_special_tokens=False)
@@ -269,6 +444,13 @@ if __name__ == '__main__':
     print(f"Encoded Long Tokens: {long_encoding_result.tokens}")
     print(f"Encoded Long IDs:    {long_encoding_result.ids}")
     print(f"Length of Long IDs: {len(long_encoding_result.ids)} (should be MAX_SEQ_LEN={config.MAX_SEQ_LEN})")
+    print(f"Full Encoding Result for Long Sentence:")
+    print(f"  - IDs: {long_encoding_result.ids}")
+    print(f"  - Tokens: {long_encoding_result.tokens}")
+    print(f"  - Attention Mask: {long_encoding_result.attention_mask}")
+    print(f"  - Special Tokens Mask: {long_encoding_result.special_tokens_mask}")
+    print(f"  - Type IDs: {long_encoding_result.type_ids}")
+    print(f"  - Offsets: {long_encoding_result.offsets}")
 
 
     # --- Clean up dummy files created during the test ---

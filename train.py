@@ -24,30 +24,30 @@ def setup_wandb(cfg):
     """Initializes a new Weights & Biases run for experiment tracking."""
     # Consolidate relevant hyperparameters from the config object into a dictionary for logging.
     hyperparameters = {
-        'encoder_model': cfg.ENCODER_MODEL_NAME,
-        'decoder_layers': cfg.DECODER_LAYERS,
-        'decoder_heads': cfg.DECODER_HEADS,
-        'decoder_ff_dim': cfg.DECODER_FF_DIM,
-        'embedding_dim': cfg.DECODER_EMBED_DIM,
-        'max_seq_len': cfg.MAX_SEQ_LEN,
-        'dropout': cfg.DECODER_DROPOUT,
-        'learning_rate': cfg.LEARNING_RATE,
-        'epochs': cfg.NUM_EPOCHS,
-        'batch_size': cfg.BATCH_SIZE,
-        'vocab_size': cfg.VOCAB_SIZE, # Note: This is the target vocab size; actual might differ slightly post-tokenizer training.
-        'warmup_steps': cfg.WARMUP_STEPS,
-        'adam_beta1': cfg.ADAM_BETA1,
-        'adam_beta2': cfg.ADAM_BETA2,
-        'adam_eps': cfg.ADAM_EPS,
-        'weight_decay': cfg.WEIGHT_DECAY,
-        'grad_clip': cfg.GRAD_CLIP_VALUE,
-        'projection_dim': cfg.PROJECTION_DIM,
-        'image_dir': cfg.IMAGE_DIR,
-        'captions_file': cfg.CAPTIONS_FILE,
-        'output_dir': cfg.OUTPUT_DIR,
-        'checkpoint_prefix': cfg.CHECKPOINT_PREFIX,
-        'log_interval': cfg.LOG_INTERVAL,
-        'validation_interval': cfg.VALIDATION_INTERVAL
+        'encoder_model': cfg.ENCODER_MODEL_NAME,      # Name of the pre-trained vision model used as encoder
+        'decoder_layers': cfg.DECODER_LAYERS,         # Number of transformer layers in the decoder
+        'decoder_heads': cfg.DECODER_HEADS,           # Number of attention heads in each decoder layer
+        'decoder_ff_dim': cfg.DECODER_FF_DIM,         # Dimension of the feed-forward network in decoder layers
+        'embedding_dim': cfg.DECODER_EMBED_DIM,       # Dimension of token embeddings in the decoder
+        'max_seq_len': cfg.MAX_SEQ_LEN,               # Maximum sequence length for generated captions
+        'dropout': cfg.DECODER_DROPOUT,               # Dropout rate for regularization in decoder
+        'learning_rate': cfg.LEARNING_RATE,           # Initial learning rate for the optimizer
+        'epochs': cfg.NUM_EPOCHS,                     # Total number of training epochs
+        'batch_size': cfg.BATCH_SIZE,                 # Number of samples processed in each training batch
+        'vocab_size': cfg.VOCAB_SIZE,                 # Target size of the tokenizer vocabulary
+        'warmup_steps': cfg.WARMUP_STEPS,             # Number of steps for learning rate warmup
+        'adam_beta1': cfg.ADAM_BETA1,                 # First moment estimate exponential decay rate for Adam
+        'adam_beta2': cfg.ADAM_BETA2,                 # Second moment estimate exponential decay rate for Adam
+        'adam_eps': cfg.ADAM_EPS,                     # Small constant for numerical stability in Adam
+        'weight_decay': cfg.WEIGHT_DECAY,             # L2 regularization coefficient
+        'grad_clip': cfg.GRAD_CLIP_VALUE,             # Maximum norm for gradient clipping
+        'projection_dim': cfg.PROJECTION_DIM,         # Dimension for projecting image features to decoder space
+        'image_dir': cfg.IMAGE_DIR,                   # Directory containing training images
+        'captions_file': cfg.CAPTIONS_FILE,           # Path to file containing image captions
+        'output_dir': cfg.OUTPUT_DIR,                 # Directory for saving model checkpoints
+        'checkpoint_prefix': cfg.CHECKPOINT_PREFIX,   # Prefix for checkpoint filenames
+        'log_interval': cfg.LOG_INTERVAL,             # Number of batches between training loss logs
+        'validation_interval': cfg.VALIDATION_INTERVAL # Number of epochs between validation runs
     }
     # Initialize the wandb run.
     run = wandb.init(
