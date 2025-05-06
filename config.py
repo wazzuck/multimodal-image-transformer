@@ -12,14 +12,15 @@ RANDOM_SEED = 42
 # --- Data Settings ---
 # Adjust these paths based on your dataset structure
 DATA_DIR = "assets" # Root directory for prepared dataset assets
-IMAGE_DIR = "../assets/flickr30k_images/flickr30k_images"  # Path to your image directory
-CAPTIONS_FILE = "../assets/captions.json"  # Path to your captions file (JSON format expected)
-OUTPUT_DIR = "output"  # Directory to save checkpoints, tokenizer, etc.
+IMAGE_DIR = "../assets/multimodal_image_transformer/images"  # Path where prepare_dataset.py saves images
+CAPTIONS_FILE = "../assets/multimodal_image_transformer/captions.json"  # Path to your captions file (JSON format expected)
+OUTPUT_DIR = "../assets/multimodal_image_transformer"  # Directory to save checkpoints, tokenizer, etc.
 
 # --- Model Settings ---
 # Choose the pre-trained image encoder model
 # Options: e.g., "google/vit-base-patch16-224-in21k", "openai/clip-vit-base-patch32"
 ENCODER_MODEL_NAME = "google/vit-base-patch16-224-in21k"
+#ENCODER_MODEL_NAME = "openai/clip-vit-base-patch32"
 
 # Decoder hyperparameters
 VOCAB_SIZE = 10000       # Size of the output vocabulary (adjust based on tokenizer)

@@ -22,7 +22,8 @@ def generate_caption(image_path: str, device: str) -> str:
         The generated caption string.
     """
     # Define the fixed path to the model checkpoint
-    checkpoint_path = "../assets/multimodal_image_transformer/multimodal_image_transformer_model_epoch2.safetensors"
+    #checkpoint_path = "../assets/multimodal_image_transformer/multimodal_image_transformer_model_epoch0.safetensors"
+    checkpoint_path = "../assets/multimodal_image_transformer/best_model_train.safetensors"
 
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"Image file not found: {image_path}")
