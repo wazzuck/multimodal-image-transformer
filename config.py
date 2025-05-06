@@ -11,10 +11,10 @@ RANDOM_SEED = 42
 
 # --- Data Settings ---
 # Adjust these paths based on your dataset structure
-DATA_DIR = "/workspace/assets" # Root directory for prepared dataset assets
-IMAGE_DIR = "/workspace/assets/multimodal_image_transformer/images"  # Path where prepare_dataset.py saves images
-CAPTIONS_FILE = "/workspace/assets/captions.json"  # Path to your captions file (JSON format expected)
-OUTPUT_DIR = "/workspace/assets/multimodal_image_transformer"  # Directory to save checkpoints, tokenizer, etc.
+DATA_DIR = "/workspace/assets/multimodal_image_transformer/" # Root directory for prepared dataset assets
+IMAGE_DIR = DATA_DIR + "images"  # Path where prepare_dataset.py saves images
+CAPTIONS_FILE = DATA_DIR + "captions.json"  # Path to your captions file (JSON format expected)
+OUTPUT_DIR = DATA_DIR  # Directory to save checkpoints, tokenizer, etc.
 
 # --- Model Settings ---
 # Choose the pre-trained image encoder model
