@@ -11,10 +11,10 @@ RANDOM_SEED = 42
 
 # --- Data Settings ---
 # Adjust these paths based on your dataset structure
-DATA_DIR = "assets" # Root directory for prepared dataset assets
-IMAGE_DIR = "../assets/multimodal_image_transformer/images"  # Path where prepare_dataset.py saves images
-CAPTIONS_FILE = "../assets/multimodal_image_transformer/captions.json"  # Path to your captions file (JSON format expected)
-OUTPUT_DIR = "../assets/multimodal_image_transformer"  # Directory to save checkpoints, tokenizer, etc.
+DATA_DIR = "/workspace/assets" # Root directory for prepared dataset assets
+IMAGE_DIR = "/workspace/assets/multimodal_image_transformer/images"  # Path where prepare_dataset.py saves images
+CAPTIONS_FILE = "/workspace/assets/captions.json"  # Path to your captions file (JSON format expected)
+OUTPUT_DIR = "/workspace/assets/multimodal_image_transformer"  # Directory to save checkpoints, tokenizer, etc.
 
 # --- Model Settings ---
 # Choose the pre-trained image encoder model
@@ -60,8 +60,8 @@ END_TOKEN_ID = 2
 UNK_TOKEN_ID = 3
 
 # Corrected Tokenizer paths relative to the assumed parent directory
-VOCAB_PATH = "../assets/multimodal_image_transformer/vocab.json" # Where the tokenizer vocab is saved/loaded
-MERGES_PATH = "../assets/multimodal_image_transformer/merges.txt" # Where the tokenizer merges are saved/loaded
+VOCAB_PATH = "/workspace/assets/multimodal_image_transformer/vocab.json" # Where the tokenizer vocab is saved/loaded
+MERGES_PATH = "/workspace/assets/multimodal_image_transformer/merges.txt" # Where the tokenizer merges are saved/loaded
 
 # --- Wandb Configuration ---
 WANDB_PROJECT = "multimodal-image-transformer" # Your project name
