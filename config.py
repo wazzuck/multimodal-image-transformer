@@ -23,6 +23,9 @@ CAPTIONS_FILE = DATA_DIR + "captions.json"  # Path to your captions file (JSON f
 # Currently set to DATA_DIR, meaning outputs will be saved alongside dataset assets.
 OUTPUT_DIR = DATA_DIR  # Directory to save checkpoints, tokenizer, etc.
 
+# Ratio of the dataset to be used for training (e.g., 0.8 for 80% train, 20% validation).
+TRAIN_SPLIT_RATIO = 0.9
+
 # --- Model Settings ---
 # Specifies the pre-trained image encoder model to be used from Hugging Face Transformers.
 # Different encoders capture image features differently and may affect performance.
