@@ -47,7 +47,14 @@ class ImageToTextModel(nn.Module):
 
         # Determine the output dimension of the encoder from its configuration.
         # This is typically the hidden size of the encoder's last layer.
-        self.encoder_output_dim = self.encoder.config.hidden_size
+        # For BLIP models, the vision model's hidden size is often in `vision_config.hidden_size`.
+        if hasattr(self.encoder.config, 'vision_config') and hasattr(self.encoder.config.vision_config, 'hidden_size'):
+            self.encoder_output_dim = self.encoder.config.vision_config.hidden_size
+        elif hasattr(self.encoder.config, 'hidden_size'): # Fallback for other models like ViT/CLIP
+            self.encoder_output_dim = self.encoder.config.hidden_size
+        else:
+            raise AttributeError(f"Could not determine encoder output dimension from encoder config: {self.encoder.config}")
+            
         self.decoder_embed_dim = decoder_embed_dim # Store decoder embedding dimension for clarity.
         self.decoder_pad_idx = decoder_pad_idx # Store decoder padding index.
 
