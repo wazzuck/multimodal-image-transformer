@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import config
 # Removed direct dependency on old encoder utilities, using Hugging Face AutoModel directly.
-from transformers import AutoModel # For loading pre-trained models.
+from transformers import AutoModel, BlipForConditionalGeneration # For loading pre-trained models.
 from decoder import TransformerDecoder # The custom Transformer decoder module.
 
 class ImageToTextModel(nn.Module):
@@ -31,8 +31,10 @@ class ImageToTextModel(nn.Module):
 
         # --- Load and Freeze Encoder ---
         print(f"Loading encoder model: {config.ENCODER_MODEL_NAME}...")
-        # Load the pre-trained image encoder model (e.g., ViT, CLIP ViT) from Hugging Face Hub.
-        self.encoder = AutoModel.from_pretrained(config.ENCODER_MODEL_NAME)
+        # Load the full BLIP model first
+        full_blip_model = BlipForConditionalGeneration.from_pretrained(config.ENCODER_MODEL_NAME)
+        # Assign its vision_model component as our encoder
+        self.encoder = full_blip_model.vision_model
         # The feature_extractor/image_processor is handled by the dataset loader for training/eval.
         # For inference via the generate() method, image preprocessing will need to be handled
         # or the generate() method adapted to use an externally provided processor.
@@ -48,12 +50,18 @@ class ImageToTextModel(nn.Module):
         # Determine the output dimension of the encoder from its configuration.
         # This is typically the hidden size of the encoder's last layer.
         # For BLIP models, the vision model's hidden size is often in `vision_config.hidden_size`.
-        if hasattr(self.encoder.config, 'vision_config') and hasattr(self.encoder.config.vision_config, 'hidden_size'):
-            self.encoder_output_dim = self.encoder.config.vision_config.hidden_size
-        elif hasattr(self.encoder.config, 'hidden_size'): # Fallback for other models like ViT/CLIP
+        # Now that self.encoder is the vision_model, its config should directly have hidden_size.
+        if hasattr(self.encoder.config, 'hidden_size'):
             self.encoder_output_dim = self.encoder.config.hidden_size
         else:
-            raise AttributeError(f"Could not determine encoder output dimension from encoder config: {self.encoder.config}")
+            # Fallback or error if hidden_size is not found (e.g. if vision_model config is structured differently)
+            # This might happen if config.ENCODER_MODEL_NAME is not a BLIP model in the future.
+            # For robust handling, one might check the type of self.encoder.config or look for other attributes.
+            print(f"Warning: Could not directly find 'hidden_size' in self.encoder.config ({type(self.encoder.config)}). Attempting to look for vision_config on the full model if available (less direct).")
+            if hasattr(full_blip_model.config, 'vision_config') and hasattr(full_blip_model.config.vision_config, 'hidden_size'):
+                 self.encoder_output_dim = full_blip_model.config.vision_config.hidden_size
+            else:
+                 raise AttributeError(f"Could not determine encoder output dimension from encoder config: {self.encoder.config} or {full_blip_model.config}")
             
         self.decoder_embed_dim = decoder_embed_dim # Store decoder embedding dimension for clarity.
         self.decoder_pad_idx = decoder_pad_idx # Store decoder padding index.
