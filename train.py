@@ -309,7 +309,7 @@ def main():
         decoder_ff_dim=config.DECODER_FF_DIM,         # Feed-forward dimension in decoder layers.
         decoder_max_seq_len=config.MAX_SEQ_LEN,       # Maximum sequence length for decoder.
         decoder_dropout=config.DECODER_DROPOUT,       # Dropout rate for regularization in decoder.
-        decoder_pad_idx=tokenizer.pad_token_id,       # Padding token ID for ignoring in loss/attention.
+        decoder_pad_idx=config.PAD_TOKEN_ID,          # Padding token ID from config.
         projection_dim=config.PROJECTION_DIM          # Dimension for projecting encoder features.
     ).to(device) # Move the model to the configured device.
     print("Model initialized and moved to device.")
