@@ -34,6 +34,11 @@ ENCODER_MODEL_NAME = "Salesforce/blip-image-captioning-base"
 # Specifies the image processor to be used, corresponding to the encoder model.
 IMAGE_PROCESSOR_NAME = "Salesforce/blip-image-captioning-base"
 
+# Specifies how image transformations are applied.
+# 'hf_processor': Use the transformations defined by the Hugging Face image processor.
+# 'custom': Implies custom transformation pipeline (not fully implemented in this snippet context).
+IMG_TRANSFORM_MODE = "hf_processor"
+
 # Decoder hyperparameters - These define the architecture of the Transformer decoder.
 # Size of the vocabulary the decoder will predict over. This should match the tokenizer's vocabulary size.
 VOCAB_SIZE = 10000       # Size of the output vocabulary (adjust based on tokenizer)
