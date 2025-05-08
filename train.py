@@ -283,7 +283,7 @@ def main():
         train_dataset,
         batch_size=config.BATCH_SIZE,
         shuffle=True, # Shuffle training data each epoch.
-        collate_fn=lambda batch: collate_fn(batch, tokenizer.pad_token_id, config.MAX_SEQ_LEN), # Use custom collate function.
+        collate_fn=lambda batch: collate_fn(batch, config.PAD_TOKEN_ID, config.MAX_SEQ_LEN), # Use custom collate function with PAD_TOKEN_ID from config.
         num_workers=config.NUM_WORKERS, # Number of worker processes for data loading.
         pin_memory=config.PIN_MEMORY   # If True, copies tensors to CUDA pinned memory before returning them (faster GPU transfer).
     )
@@ -291,7 +291,7 @@ def main():
         val_dataset,
         batch_size=config.BATCH_SIZE,
         shuffle=False, # No need to shuffle validation data.
-        collate_fn=lambda batch: collate_fn(batch, tokenizer.pad_token_id, config.MAX_SEQ_LEN),
+        collate_fn=lambda batch: collate_fn(batch, config.PAD_TOKEN_ID, config.MAX_SEQ_LEN), # Use custom collate function with PAD_TOKEN_ID from config.
         num_workers=config.NUM_WORKERS,
         pin_memory=config.PIN_MEMORY
     )
