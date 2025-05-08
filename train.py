@@ -324,7 +324,7 @@ def main():
         weight_decay=config.WEIGHT_DECAY
     )
     # Define the loss function: CrossEntropyLoss, ignoring padding tokens.
-    criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
+    criterion = nn.CrossEntropyLoss(ignore_index=config.PAD_TOKEN_ID)
     print("Optimizer and loss function initialized.")
 
     # --- Learning Rate Scheduler Setup (Optional) --- #
