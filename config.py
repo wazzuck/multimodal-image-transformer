@@ -31,6 +31,9 @@ TRAIN_SPLIT_RATIO = 0.9
 # More workers can speed up data loading if I/O or CPU preprocessing is a bottleneck.
 NUM_WORKERS = 2
 
+# Whether to use pinned memory for DataLoader. Speeds up CPU to GPU data transfer if DEVICE is CUDA.
+PIN_MEMORY = True if DEVICE == "cuda" else False
+
 # --- Model Settings ---
 # Specifies the pre-trained image encoder model to be used from Hugging Face Transformers.
 # Different encoders capture image features differently and may affect performance.
