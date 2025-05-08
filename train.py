@@ -433,33 +433,43 @@ def main():
                     torch.save(checkpoint_data, checkpoint_path)
                     print(f"Checkpoint saved: {checkpoint_path} (Val Loss: {val_loss:.4f})")
 
+                    # Also save the model weights in .safetensors format
+                    safetensors_filename = checkpoint_filename.replace(".pt", ".safetensors")
+                    safetensors_filepath = os.path.join(config.OUTPUT_DIR, safetensors_filename)
+                    save_file(model.state_dict(), safetensors_filepath) # Using save_file from safetensors.torch
+                    print(f"Model weights saved in .safetensors format: {safetensors_filepath}")
+
                     if wandb_run:
                         # Log an artifact to W&B (optional but good practice).
                         artifact_name = f"{config.WANDB_RUN_NAME if config.WANDB_RUN_NAME else 'model'}-epoch{epoch+1}"
-                        model_artifact = wandb.Artifact(artifact_name, type='model', description=f"Model checkpoint at epoch {epoch+1} with val loss {val_loss:.4f}")
-                        model_artifact.add_file(checkpoint_path)
+                        model_artifact = wandb.Artifact(
+                            artifact_name,
+                            type='model',
+                            description=f"Model checkpoint and weights at epoch {epoch+1} with val loss {val_loss:.4f}"
+                        )
+                        model_artifact.add_file(checkpoint_path) # Add the full .pt checkpoint
+                        model_artifact.add_file(safetensors_filepath) # Add the .safetensors weights
                         wandb.log_artifact(model_artifact)
-                        print(f"W&B Artifact '{artifact_name}' created and logged.")
+                        print(f"W&B Artifact '{artifact_name}' created and logged with .pt and .safetensors files.")
 
                     # --- Hugging Face Hub Model Upload --- #
                     if hf_api and config.HF_UPLOAD_BEST_CHECKPOINTS: # Check if upload is enabled.
-                        print(f"Attempting to upload best checkpoint to Hugging Face Hub: {config.HF_REPO_ID}")
+                        print(f"Attempting to upload best model weights (.safetensors) to Hugging Face Hub: {config.HF_REPO_ID}")
                         try:
-                            # Upload the checkpoint file to the HF Hub repository.
+                            # Upload the .safetensors model weights file to the HF Hub repository.
                             hf_api.upload_file(
-                                path_or_fileobj=checkpoint_path,
-                                path_in_repo=checkpoint_filename, # Name of the file in the repository.
+                                path_or_fileobj=safetensors_filepath,
+                                path_in_repo=safetensors_filename, # Name of the file in the repository.
                                 repo_id=config.HF_REPO_ID,
                                 repo_type="model"
                             )
                             # Optionally, upload a README or model card if not already present or needs update.
-                            # For simplicity, only the checkpoint is uploaded here.
-                            print(f"Successfully uploaded checkpoint '{checkpoint_filename}' to {config.HF_REPO_ID} on Hugging Face Hub.")
+                            # For simplicity, only the .safetensors weights are uploaded here.
+                            print(f"Successfully uploaded model weights '{safetensors_filename}' to {config.HF_REPO_ID} on Hugging Face Hub.")
                         except Exception as e:
-                            print(f"Error uploading checkpoint to Hugging Face Hub: {e}")
+                            print(f"Error uploading .safetensors model weights to Hugging Face Hub: {e}")
                             if wandb_run:
-                                wandb.log({"warning": f"HF Hub upload failed for {checkpoint_filename}: {str(e)}"})
-
+                                wandb.log({"warning": f"HF Hub .safetensors upload failed for {safetensors_filename}: {str(e)}"})
                 except Exception as e:
                     print(f"Error saving checkpoint: {e}")
                     if wandb_run:
