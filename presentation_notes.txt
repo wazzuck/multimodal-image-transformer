@@ -1,0 +1,14 @@
+Notes for slides
+
+I had some interesting results
+
+If an image in the `captions_file` has multiple associated captions, this dataset
+    creates a distinct image-caption pair for each one. For example, if 'image1.jpg'
+    has ['caption A', 'caption B'], it results in two separate training examples:
+    ('image1.jpg', 'caption A') and ('image1.jpg', 'caption B').
+    This approach ensures the model learns from all provided caption variations for
+    each image during training.
+    """
+
+
+Each Training EPOCH approx 17-18mins

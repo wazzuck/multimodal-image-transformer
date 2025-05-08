@@ -249,159 +249,226 @@ def main():
         print(f"Error loading tokenizer files: {e}. Ensure {config.VOCAB_PATH} and {config.MERGES_PATH} exist or can be trained.")
         print("Cannot proceed without a valid tokenizer.")
         return # Exit if tokenizer cannot be loaded.
-    except Exception as e:
+    except Exception as e: # Catch other potential errors during tokenizer loading.
         print(f"An unexpected error occurred while loading the tokenizer: {e}")
-        return # Exit on other tokenizer loading errors.
+        print("Cannot proceed without a valid tokenizer.")
+        return
 
     # Use the actual vocabulary size obtained from the tokenizer for the model.
     effective_vocab_size = actual_vocab_size
 
-    # --- Dataset and Dataloaders --- #
-    print("Loading and preparing dataset...")
-    # Initialize the custom ImageTextDataset.
-    # This dataset handles loading images and their corresponding tokenized captions.
+    # --- Dataset and DataLoader Setup --- #
+    print("Loading and preparing datasets...")
+    # Create the full dataset using images and captions.
+    # The image processor is sourced from the config (e.g., ViTImageProcessor, CLIPProcessor).
     full_dataset = ImageTextDataset(
-        image_dir=config.IMAGE_DIR,          # Directory containing image files.
-        captions_file=config.CAPTIONS_FILE,  # Path to the JSON captions file.
-        max_seq_len=config.MAX_SEQ_LEN       # Maximum sequence length for tokenized captions.
-        # The tokenizer instance is implicitly used by the dataset via global access or could be passed explicitly.
+        image_dir=config.IMAGE_DIR,
+        captions_file=config.CAPTIONS_FILE,
+        tokenizer=tokenizer, # Pass the loaded tokenizer.
+        image_processor_name=config.IMAGE_PROCESSOR_NAME, # Name of HF image processor.
+        max_seq_len=config.MAX_SEQ_LEN, # Max sequence length for padding/truncation.
+        img_transform_mode=config.IMG_TRANSFORM_MODE # 'hf_processor' or 'custom'
     )
 
-    if len(full_dataset) == 0:
-        print("Error: The dataset is empty. Please check image directory and captions file paths and content.")
-        return # Exit if the dataset has no samples.
-
     # Split the dataset into training and validation sets.
-    # Define split sizes (e.g., 90% train, 10% validation).
-    train_size = int(0.9 * len(full_dataset))
+    train_size = int(config.TRAIN_SPLIT_RATIO * len(full_dataset))
     val_size = len(full_dataset) - train_size
     train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
     print(f"Dataset split: {len(train_dataset)} training samples, {len(val_dataset)} validation samples.")
 
-    # Create DataLoaders for training and validation sets.
-    # DataLoaders handle batching, shuffling, and parallel data loading.
+    # Create DataLoaders for training and validation.
+    # DataLoaders handle batching, shuffling, and multi-processing for data loading.
     train_dataloader = DataLoader(
-        train_dataset, 
-        batch_size=config.BATCH_SIZE, 
+        train_dataset,
+        batch_size=config.BATCH_SIZE,
         shuffle=True, # Shuffle training data each epoch.
-        collate_fn=collate_fn # Custom collate function to pad sequences in a batch.
+        collate_fn=lambda batch: collate_fn(batch, tokenizer.pad_token_id, config.MAX_SEQ_LEN), # Use custom collate function.
+        num_workers=config.NUM_WORKERS, # Number of worker processes for data loading.
+        pin_memory=config.PIN_MEMORY   # If True, copies tensors to CUDA pinned memory before returning them (faster GPU transfer).
     )
     val_dataloader = DataLoader(
-        val_dataset, 
-        batch_size=config.BATCH_SIZE, 
+        val_dataset,
+        batch_size=config.BATCH_SIZE,
         shuffle=False, # No need to shuffle validation data.
-        collate_fn=collate_fn
+        collate_fn=lambda batch: collate_fn(batch, tokenizer.pad_token_id, config.MAX_SEQ_LEN),
+        num_workers=config.NUM_WORKERS,
+        pin_memory=config.PIN_MEMORY
     )
     print("DataLoaders created.")
 
     # --- Model Initialization --- #
-    print(f"Initializing model with effective vocab size: {effective_vocab_size}...")
-    # Initialize the ImageToTextModel with hyperparameters from config and the effective vocabulary size.
+    print(f"Initializing model: {config.ENCODER_MODEL_NAME} encoder, with {config.DECODER_LAYERS} decoder layers.")
+    # Instantiate the ImageToTextModel.
     model = ImageToTextModel(
-        decoder_vocab_size=effective_vocab_size,
-        decoder_embed_dim=config.DECODER_EMBED_DIM,
-        decoder_heads=config.DECODER_HEADS,
-        decoder_layers=config.DECODER_LAYERS,
-        decoder_ff_dim=config.DECODER_FF_DIM,
-        decoder_max_seq_len=config.MAX_SEQ_LEN,
-        decoder_dropout=config.DECODER_DROPOUT,
-        decoder_pad_idx=config.PAD_TOKEN_ID
+        encoder_model_name=config.ENCODER_MODEL_NAME, # Name of the pre-trained vision encoder.
+        decoder_vocab_size=actual_vocab_size,         # Actual vocabulary size from the tokenizer.
+        decoder_embed_dim=config.DECODER_EMBED_DIM,   # Embedding dimension for decoder tokens.
+        decoder_heads=config.DECODER_HEADS,           # Number of attention heads in decoder.
+        decoder_layers=config.DECODER_LAYERS,         # Number of transformer layers in decoder.
+        decoder_ff_dim=config.DECODER_FF_DIM,         # Feed-forward dimension in decoder layers.
+        decoder_max_seq_len=config.MAX_SEQ_LEN,       # Maximum sequence length for decoder.
+        decoder_dropout=config.DECODER_DROPOUT,       # Dropout rate for regularization in decoder.
+        decoder_pad_idx=tokenizer.pad_token_id,       # Padding token ID for ignoring in loss/attention.
+        projection_dim=config.PROJECTION_DIM          # Dimension for projecting encoder features.
     ).to(device) # Move the model to the configured device.
     print("Model initialized and moved to device.")
 
-    # --- Optimizer and Loss Criterion --- #
-    # Initialize the AdamW optimizer with configured learning rate and weight decay.
-    # AdamW is often preferred for training Transformer models.
+    # --- Optimizer and Loss Function Setup --- #
+    # Initialize the AdamW optimizer with configured parameters.
     optimizer = optim.AdamW(
-        model.parameters(), 
-        lr=config.LEARNING_RATE, 
+        model.parameters(),
+        lr=config.LEARNING_RATE,
         betas=(config.ADAM_BETA1, config.ADAM_BETA2),
         eps=config.ADAM_EPS,
         weight_decay=config.WEIGHT_DECAY
     )
-    # Initialize the CrossEntropyLoss criterion.
-    # `ignore_index=config.PAD_TOKEN_ID` ensures that padding tokens do not contribute to the loss.
-    criterion = nn.CrossEntropyLoss(ignore_index=config.PAD_TOKEN_ID)
-    print("Optimizer and loss criterion initialized.")
+    # Define the loss function: CrossEntropyLoss, ignoring padding tokens.
+    criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
+    print("Optimizer and loss function initialized.")
 
-    # --- Learning Rate Scheduler (Optional) --- #
+    # --- Learning Rate Scheduler Setup (Optional) --- #
     scheduler = None # Initialize scheduler to None.
     if config.WARMUP_STEPS > 0:
-        print(f"Setting up learning rate scheduler with {config.WARMUP_STEPS} warmup steps.")
-        # Total training steps for scheduler calculation.
+        # Calculate total training steps for the scheduler.
         num_training_steps = len(train_dataloader) * config.NUM_EPOCHS
-        # Use a linear warmup followed by linear decay scheduler.
+        # Create a linear learning rate scheduler with warmup.
         scheduler = get_linear_schedule_with_warmup(
             optimizer,
             num_warmup_steps=config.WARMUP_STEPS,
             num_training_steps=num_training_steps
         )
-        print("Scheduler initialized.")
+        print(f"Learning rate scheduler with {config.WARMUP_STEPS} warmup steps initialized.")
+
+    # --- Checkpoint Loading for Resuming Training --- #
+    start_epoch = 0
+    best_val_loss = float('inf')
+
+    if hasattr(config, 'RESUME_CHECKPOINT_PATH') and config.RESUME_CHECKPOINT_PATH and os.path.exists(config.RESUME_CHECKPOINT_PATH):
+        print(f"Attempting to resume training from checkpoint: {config.RESUME_CHECKPOINT_PATH}")
+        try:
+            checkpoint = torch.load(config.RESUME_CHECKPOINT_PATH, map_location=device)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            if scheduler and 'scheduler_state_dict' in checkpoint and checkpoint['scheduler_state_dict']:
+                scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            start_epoch = checkpoint['epoch'] + 1
+            best_val_loss = checkpoint.get('best_val_loss', float('inf')) # Use get for backward compatibility
+            
+            print(f"Successfully resumed training. Starting from epoch {start_epoch}.")
+            if wandb_run:
+                 wandb.log({"status": f"Resumed from epoch {start_epoch-1}", "resumed_checkpoint": config.RESUME_CHECKPOINT_PATH})
+        except Exception as e:
+            print(f"Error loading checkpoint: {e}. Starting training from scratch.")
+            start_epoch = 0
+            best_val_loss = float('inf')
+            # Potentially log this error to wandb as well if needed
+            if wandb_run:
+                wandb.log({"warning": f"Checkpoint loading failed: {str(e)}. Training from scratch."})
+    else:
+        if hasattr(config, 'RESUME_CHECKPOINT_PATH') and config.RESUME_CHECKPOINT_PATH:
+            print(f"Warning: RESUME_CHECKPOINT_PATH ('{config.RESUME_CHECKPOINT_PATH}') was set, but the file does not exist. Starting training from scratch.")
+            if wandb_run:
+                 wandb.log({"warning": f"Checkpoint not found at {config.RESUME_CHECKPOINT_PATH}. Training from scratch."})
+        else:
+            print("No resume checkpoint specified or feature not enabled in config. Starting training from scratch.")
+
 
     # --- Training Loop --- #
-    print(f"Starting training for {config.NUM_EPOCHS} epochs on device '{device}'...")
-    best_val_loss = float('inf') # Initialize best validation loss for checkpointing.
+    print(f"Starting training for {config.NUM_EPOCHS - start_epoch} epochs (from epoch {start_epoch + 1} to {config.NUM_EPOCHS}).")
+    for epoch in range(start_epoch, config.NUM_EPOCHS):
+        epoch_start_time = time.time() # Record the start time of the epoch.
 
-    for epoch in range(config.NUM_EPOCHS):
-        start_time = time.time() # Record epoch start time.
-
-        # Perform one epoch of training.
+        # Run one epoch of training.
         train_loss = train_one_epoch(
-            model, train_dataloader, optimizer, criterion, device, 
+            model, train_dataloader, optimizer, criterion, device,
             config.GRAD_CLIP_VALUE, scheduler, epoch, config.LOG_INTERVAL, wandb_run
         )
-        
-        epoch_duration = time.time() - start_time # Calculate epoch duration.
+        epoch_duration = time.time() - epoch_start_time # Calculate epoch duration.
 
         print(f"Epoch {epoch+1}/{config.NUM_EPOCHS} | Train Loss: {train_loss:.4f} | Duration: {epoch_duration:.2f}s")
-
-        # Log epoch-level training metrics to WandB.
         if wandb_run:
             wandb.log({
                 "epoch_train_loss": train_loss,
-                "epoch": epoch + 1
+                "epoch": epoch + 1, # Log epoch starting from 1.
+                "epoch_duration_seconds": epoch_duration
             })
 
-        # Perform validation at specified intervals.
+        # --- Validation (Periodically) --- #
         if (epoch + 1) % config.VALIDATION_INTERVAL == 0:
+            val_start_time = time.time() # Record validation start time.
             val_loss = evaluate(model, val_dataloader, criterion, device)
-            print(f"Epoch {epoch+1}/{config.NUM_EPOCHS} | Validation Loss: {val_loss:.4f}")
-            
-            # Log validation metrics to WandB.
+            val_duration = time.time() - val_start_time # Calculate validation duration.
+
+            print(f"Epoch {epoch+1}/{config.NUM_EPOCHS} | Validation Loss: {val_loss:.4f} | Val Duration: {val_duration:.2f}s")
             if wandb_run:
-                wandb.log({"val_loss": val_loss, "epoch": epoch + 1})
+                wandb.log({
+                    "epoch_val_loss": val_loss,
+                    "epoch": epoch + 1, # Log epoch starting from 1.
+                    "val_duration_seconds": val_duration
+                })
 
-            # Save the model checkpoint if validation loss has improved.
+            # --- Checkpointing (Save model if validation loss improved) --- #
             if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                checkpoint_name = f"{config.CHECKPOINT_PREFIX}_epoch_{epoch+1}_val_loss_{val_loss:.4f}.safetensors"
-                checkpoint_path = os.path.join(config.OUTPUT_DIR, checkpoint_name)
-                # Save model state dictionary using safetensors for safety and efficiency.
-                save_file(model.state_dict(), checkpoint_path)
-                print(f"Checkpoint saved: {checkpoint_path} (Best val_loss: {best_val_loss:.4f})")
+                best_val_loss = val_loss # Update the best validation loss.
+                # Construct checkpoint filename with epoch and validation loss.
+                checkpoint_filename = f"{config.CHECKPOINT_PREFIX}_epoch_{epoch+1}_val_loss_{val_loss:.4f}.pt"
+                checkpoint_path = os.path.join(config.OUTPUT_DIR, checkpoint_filename)
 
-                # Upload to Hugging Face Hub if API is available.
-                if hf_api:
-                    try:
-                        print(f"Uploading checkpoint {checkpoint_name} to Hugging Face Hub...")
-                        hf_api.upload_file(
-                            path_or_fileobj=checkpoint_path,
-                            path_in_repo=checkpoint_name, # Filename in the Hub repository.
-                            repo_id=config.HF_REPO_ID,
-                            repo_type="model"
-                        )
-                        print(f"Successfully uploaded {checkpoint_name} to {config.HF_REPO_ID}.")
-                    except Exception as e:
-                        print(f"Error uploading checkpoint to Hugging Face Hub: {e}")
+                # Prepare checkpoint dictionary
+                checkpoint_data = {
+                    'epoch': epoch, # Save the completed epoch number (0-indexed)
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'best_val_loss': best_val_loss,
+                    'config': {k: v for k, v in config.__dict__.items() if not k.startswith('__') and not callable(v)} # Save non-private config attributes
+                }
+                if scheduler:
+                    checkpoint_data['scheduler_state_dict'] = scheduler.state_dict()
+                
+                try:
+                    # Save the model checkpoint using torch.save for the dictionary.
+                    torch.save(checkpoint_data, checkpoint_path)
+                    print(f"Checkpoint saved: {checkpoint_path} (Val Loss: {val_loss:.4f})")
+
+                    if wandb_run:
+                        # Log an artifact to W&B (optional but good practice).
+                        artifact_name = f"{config.WANDB_RUN_NAME if config.WANDB_RUN_NAME else 'model'}-epoch{epoch+1}"
+                        model_artifact = wandb.Artifact(artifact_name, type='model', description=f"Model checkpoint at epoch {epoch+1} with val loss {val_loss:.4f}")
+                        model_artifact.add_file(checkpoint_path)
+                        wandb.log_artifact(model_artifact)
+                        print(f"W&B Artifact '{artifact_name}' created and logged.")
+
+                    # --- Hugging Face Hub Model Upload --- #
+                    if hf_api and config.HF_UPLOAD_BEST_CHECKPOINTS: # Check if upload is enabled.
+                        print(f"Attempting to upload best checkpoint to Hugging Face Hub: {config.HF_REPO_ID}")
+                        try:
+                            # Upload the checkpoint file to the HF Hub repository.
+                            hf_api.upload_file(
+                                path_or_fileobj=checkpoint_path,
+                                path_in_repo=checkpoint_filename, # Name of the file in the repository.
+                                repo_id=config.HF_REPO_ID,
+                                repo_type="model"
+                            )
+                            # Optionally, upload a README or model card if not already present or needs update.
+                            # For simplicity, only the checkpoint is uploaded here.
+                            print(f"Successfully uploaded checkpoint '{checkpoint_filename}' to {config.HF_REPO_ID} on Hugging Face Hub.")
+                        except Exception as e:
+                            print(f"Error uploading checkpoint to Hugging Face Hub: {e}")
+                            if wandb_run:
+                                wandb.log({"warning": f"HF Hub upload failed for {checkpoint_filename}: {str(e)}"})
+
+                except Exception as e:
+                    print(f"Error saving checkpoint: {e}")
+                    if wandb_run:
+                        wandb.log({"error": f"Checkpoint saving failed for {checkpoint_filename}: {str(e)}"})
             else:
-                # Optionally, save checkpoints even if not the best, e.g., every few epochs.
-                pass # Current setup only saves the best based on val_loss.
+                print(f"Validation loss ({val_loss:.4f}) did not improve from best ({best_val_loss:.4f}). Not saving checkpoint.")
 
+    # --- Finalization --- #
     print("Training finished.")
-    # --- Finalize Wandb Run --- #
     if wandb_run:
-        wandb.finish() # Mark the Wandb run as complete.
-        print("Wandb run finished.")
+        wandb.finish() # Close the Weights & Biases run.
+        print("WandB run finished.")
 
 # Standard Python entry point: execute main() if the script is run directly.
 if __name__ == "__main__":

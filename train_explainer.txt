@@ -1,0 +1,571 @@
+# What the `train.py` Script Does: A Detailed Explanation
+
+This document explains the `train.py` script step-by-step, aiming for
+clarity and simplicity while covering its core functionalities. The script's
+main purpose is to train a deep learning model that can generate textual
+descriptions (captions) for given images.
+
+## 1. Overall Goal
+
+The script trains an "Image-to-Text" model. You give this model an image,
+and it learns to produce a relevant sentence describing that image. This
+involves showing the model many examples of images paired with human-written
+captions and teaching it to find patterns between the visual information in
+images and the textual information in captions.
+
+```ascii
++-----------------------+     +-----------------------+
+| Input:                |     | Input:                |
+| Raw Image Files       |     | Caption Data          |
+| (e.g., JPG, PNG)      |     | (e.g., JSON file with |
+|                       |     |  image_id: captions)  |
++-----------+-----------+     +-----------+-----------+
+            |                           |
+            |                           |
+            +-----------+---------------+
+                        |
+                        v
++-----------------------------------------------------+
+|                  train.py Script                    |
+|         (Orchestrates the Training Process)         |
++-----------------------------------------------------+
+| 1. Data Preparation:                                |
+|    - Load Images & Captions                         |
+|    - Tokenize Captions (Text -> Numerical IDs)      |
+|    - Create Batches (Image Tensors + Token IDs)     |
+|                                                     |
+| 2. Model Training Loop:                             |
+|    - Image Encoder (ViT, CLIP) -> Image Features    |
+|    - Text Decoder (Transformer) -> Predicts Caption |
+|    - Calculate Loss (Predicted vs. Actual)          |
+|    - Backpropagation & Optimizer Step (Adjusts Model)|
+|                                                     |
+| 3. Evaluation & Checkpointing:                      |
+|    - Validate on unseen data                        |
+|    - Save best model weights (.safetensors)         |
+|    - Log metrics (WandB)                            |
++-----------------------+-----------------------------+
+                        |
+                        v
++-----------------------------------------------------+
+| Output:                                             |
+| Trained Image-to-Text Model                         |
+| (e.g., `model.safetensors`)                         |
+|                                                     |
+|  - Takes an image as input.                         |
+|  - Generates a textual description (caption).       |
++-----------------------------------------------------+
+```
+
+## 2. Setup and Preparations
+
+Before the actual training can begin, the script performs several setup
+tasks:
+
+### a. Importing Necessary Tools (Libraries)
+The script starts by importing various Python libraries and modules. Think of
+these as toolkits that provide pre-built functions and components:
+-   `torch`, `torch.nn`, `torch.optim`: Parts of PyTorch, the main deep
+    learning framework for building and training the model.
+-   `DataLoader`, `random_split`: PyTorch tools for loading and splitting
+    datasets.
+-   `model.ImageToTextModel`: Our custom model architecture (image encoder +
+    text decoder).
+-   `dataset.ImageTextDataset`, `collate_fn`: Custom code for handling
+    image/caption data. Ensures each image-caption pair is a unique
+    training example if multiple captions exist for an image.
+-   `tokenizer`: Utilities for text tokenization (text to numerical IDs).
+-   `config`: A configuration file (`config.py`) storing settings and
+    hyperparameters (e.g., learning rates, model sizes, file paths).
+-   `os`, `time`, `json`: Standard Python libraries for OS interaction,
+    time management, and JSON data handling.
+-   `tqdm`: A library for displaying progress bars during lengthy operations.
+-   `prepare_dataset`: A script to ensure the image dataset (e.g., Flickr30k)
+    is downloaded and formatted correctly before training begins.
+-   `safetensors.torch`: Used for saving model checkpoints in a secure and
+    efficient format, which is good for sharing and loading models.
+-   `wandb`: Weights & Biases, a popular tool for experiment tracking. It
+    helps log metrics (like loss), visualize training progress, and compare
+    different training runs.
+-   `huggingface_hub`: Provides tools for interacting with the Hugging Face
+    Hub, a platform for sharing models, datasets, and demos with the
+    community.
+-   `transformers.get_linear_schedule_with_warmup`: A learning rate
+    scheduler from the Hugging Face Transformers library to adjust the
+    learning rate during training.
+
+### b. Setting up Experiment Tracking (`setup_wandb` function)
+-   Initializes a connection to Weights & Biases (WandB), if configured.
+-   Logs important hyperparameters from the `config` file (like model
+    architecture details, learning rate, batch size) to WandB. This helps
+    keep track of what settings were used for each training run.
+-   A unique URL for the WandB run is printed, allowing you to monitor the
+    training progress live in your web browser.
+
+### c. Preparing the Dataset (`prepare_dataset.prepare_flickr30k()`
+call in `main`)
+-   Calls a function, likely from `prepare_dataset.py`, to check if the
+    required image dataset (e.g., Flickr30k) is available and properly
+    set up. If not, this step might involve downloading, extracting, and
+    formatting the images and their associated caption files.
+
+```ascii
++-----------------+  +-------------------+  +-----------------+
+| Raw Images &    |->|prepare_dataset.py |->|Organized Dataset|
+| Captions        |  |(Download,Extract,|  |(Images in dir, |
+| (Flickr30k arch)|  | Format)         |  |captions in JSON)|
++-----------------+  +-------------------+  +-----------------+
+                               |
+                               v
+                       (Used by train.py)
+```
+
+### d. Setting up the Tokenizer (in `main`)
+The model can't understand raw text; it needs text converted to numbers
+(tokens).
+-   **Check for Existing Tokenizer:** The script first checks if tokenizer
+    files (typically `vocab.json` for vocabulary mapping and `merges.txt`
+    for BPE merge rules) already exist at configured paths.
+-   **Train Tokenizer (if needed):** If these files are not found:
+    -   It loads all caption texts from the dataset.
+    -   It trains a new tokenizer (Byte-Pair Encoding or BPE) using these
+        captions. BPE learns common sub-word units, which helps handle
+        large vocabularies and words not seen during training.
+    -   The newly trained tokenizer's vocabulary and merge rules are saved.
+-   **Load Tokenizer:** Whether pre-existing or newly trained, the tokenizer
+    is loaded into memory for use.
+-   **Get Vocabulary Size:** The actual size of the tokenizer's vocabulary
+    is determined. This is crucial for setting up the output layer of the
+    text decoder part of the model.
+
+```ascii
+                         +-------------------+
+                         | All Caption Texts |
+                         | from Dataset      |
+                         +---------+---------+
+                                   |
+                 (If tokenizer files not found)
+                                   |
+                                   v
++-------------------+    +-------------------+  +--------------+
+| Check Tokenizer   |--->| Train Tokenizer   |->| vocab.json   |
+| Files (voc/merges)|    | (uses captions)   |  | merges.txt   |
++-------------------+    +-------------------+  +--------------+
+        |                        |                    |
+(Files Found)            (Newly Trained)          (Loaded)
+        |                        |                    |
+        +------------------------+--------------------+
+                                   |
+                                   v
+                         +-------------------+
+                         | Loaded Tokenizer  |
+                         | Instance (in mem) |
+                         +-------------------+
+```
+
+### e. Preparing Data Loaders (in `main`)
+Once images and tokenized captions are ready, DataLoaders are set up:
+-   **`ImageTextDataset` Init:** An instance of `ImageTextDataset` is
+    created. This custom dataset class knows how to:
+    -   Find an image file and its corresponding caption(s).
+    -   Use an image processor (e.g., ViTImageProcessor, CLIPProcessor
+        from Hugging Face) to resize, normalize, and convert the image
+        into a tensor (a numerical representation).
+    -   Use the loaded tokenizer to convert the caption text into a
+        sequence of token IDs.
+    -   Pad or truncate the token ID sequence to a fixed maximum length
+        (`config.MAX_SEQ_LEN`).
+-   **Splitting Data:** The full dataset is split into a training set (e.g.,
+    90% of the data) and a validation set (e.g., 10%). The model trains
+    on the training set, and its performance is periodically checked on the
+    validation set to gauge generalization.
+-   **`DataLoader` Init:** Separate `DataLoader` instances are created for
+    the training and validation sets. DataLoaders handle:
+    -   Grouping individual data samples (image tensor + caption token IDs)
+        into batches (e.g., 32 samples per batch).
+    -   Shuffling the training data at the beginning of each epoch (to
+        ensure the model doesn't just learn the order of data).
+    -   Using a `collate_fn`: This special function takes a list of
+        individual dataset items and intelligently combines them into a
+        single batch, ensuring tensors have compatible shapes. It also
+        prepares `decoder_input_tokens` (what the decoder sees as input)
+        and `target_tokens` (what the decoder should predict).
+
+### f. Configuration for Resuming Training (New)
+- The script now supports resuming training from a previously saved checkpoint.
+- This is typically configured via `config.py` by setting a variable like `config.RESUME_CHECKPOINT_PATH` to the path of the checkpoint file (e.g., `"checkpoints/checkpoint_epoch_10_val_loss_0.75.safetensors"`).
+- If this path is set and the checkpoint file exists, the script will load the model weights, optimizer state, scheduler state, and the last completed epoch number to continue training. If it's `None` or an empty string, training starts from scratch.
+
+## 3. Model Building Blocks (in `main`)
+
+### a. Initializing the Image-to-Text Model
+-   The `ImageToTextModel` (our custom architecture) is instantiated.
+-   **Resuming:** If resuming from a checkpoint, the model's learned weights (`state_dict`) are loaded from the checkpoint file at this stage, instead of initializing from scratch. Otherwise, it's initialized with fresh weights.
+-   The model likely consists of two main parts:
+    1.  **Encoder:** Processes the input image (using a pre-trained vision
+        model like ViT or CLIP, specified in `config.ENCODER_MODEL_NAME`)
+        to extract visual features – a numerical summary of the image.
+    2.  **Decoder:** A Transformer-based sequence model that takes the image
+        features from the encoder and generates the caption token by token.
+-   Key hyperparameters for the decoder are passed from the `config` file:
+    -   `decoder_vocab_size`: The actual vocabulary size from the tokenizer.
+    -   `decoder_embed_dim`: Dimension of token embeddings.
+    -   `decoder_heads`: Number of attention heads in Transformer layers.
+    -   `decoder_layers`: Number of Transformer layers in the decoder.
+    -   `decoder_ff_dim`: Dimension of feed-forward networks in Transformer
+        layers.
+    -   `decoder_max_seq_len`: Maximum caption length the decoder handles.
+    -   `decoder_dropout`: Dropout rate for regularization (prevents
+        overfitting).
+    -   `decoder_pad_idx`: The ID of the padding token, so the model can
+        ignore it during loss calculation and attention.
+-   The model is then moved to the configured computation device (e.g.,
+    "cuda" for GPU if available, or "cpu").
+
+```ascii
++-----------------+   +-------------+   +--------------+
+| Image Tensor    |-->| Image       |-->| Image        |
+| (from DLoader)  |   | Encoder     |   | Features     |
++-----------------+   | (ViT, CLIP) |   | (Ctx for Dec)|
+                      +-------------+   +------+-------+
+                                                 |
+                                                 v
++-----------------+   +-------------+   +--------------+
+| Decoder Input   |-->| Text        |-->| Predicted    |
+| Tokens (<START>)|   | Decoder     |   | (Logits)     |
++-----------------+   | (Transform.)|   |              |
+                      +-------------+   +--------------+
+```
+
+### b. Setting up the Optimizer
+-   An optimizer is chosen, typically AdamW.
+-   **Resuming:** If resuming, the optimizer's state (including its internal moving averages for adaptive learning rates) is loaded from the checkpoint. This is crucial for effective resumption. Otherwise, a new optimizer is created.
+-   It's given the model's parameters and configured with:
+    -   `lr`: Learning rate (how big the steps are when adjusting params).
+    -   Other AdamW-specific parameters like `betas`, `eps`, and
+        `weight_decay` (a regularization technique).
+
+### c. Defining the Loss Function
+-   `nn.CrossEntropyLoss` is set up as the criterion to measure how
+    "wrong" the model's predictions are compared to the actual captions.
+-   `ignore_index=config.PAD_TOKEN_ID` is important: it tells the loss
+    function to ignore padding tokens when calculating the loss. Padding is
+    just there for sequence length consistency and doesn't represent
+    actual content to be predicted.
+
+### d. Setting up a Learning Rate Scheduler (Optional)
+-   If `config.WARMUP_STEPS` is greater than 0, a learning rate scheduler is created.
+-   **Resuming:** If resuming and a scheduler was used, its state is also loaded from the checkpoint to ensure the learning rate schedule continues correctly. Otherwise, a new scheduler is initialized.
+-   This scheduler gradually increases the learning rate from a small value
+    to its target value over "warmup" steps, then can decrease it. This
+    can help stabilize training, especially in the early stages.
+
+## 4. The Training Process (`train_one_epoch` function)
+
+This function defines what happens during one full pass (an epoch) over the
+entire training dataset.
+
+-   **Set Model to Training Mode:** `model.train()` tells PyTorch to enable
+    behaviors specific to training, like dropout and applying batch
+    normalization updates if used.
+-   **Iterate Through Batches:** The function loops through the
+    `train_dataloader`, getting one batch of data at a time. A `tqdm`
+    progress bar shows the progress through the epoch.
+-   **Move Data to Device:** Image tensors and caption token tensors in the
+    batch are moved to the configured device (GPU/CPU).
+-   **Zero Gradients:** `optimizer.zero_grad()` clears any gradients that
+    might have been calculated in the previous iteration/step.
+-   **Forward Pass:** `logits = model(images, decoder_input_tokens)`
+    -   The images and `decoder_input_tokens` (e.g., "<START> The cat")
+        are fed into the model.
+    -   The model produces `logits` – raw, unnormalized scores for each
+        possible token in the vocabulary, for each position in the output
+        sequence.
+-   **Calculate Loss:**
+    -   The `criterion` (CrossEntropyLoss) compares the model's `logits`
+        with the `target_tokens` (e.g., "The cat <END>").
+    -   It calculates how different the predictions are from the actual
+        target captions. A lower loss means the model is doing better.
+-   **Backward Pass:** `loss.backward()`
+    -   This is where learning occurs. PyTorch automatically calculates the
+        gradients (derivatives) of the loss with respect to all of the
+        model's parameters. Gradients show how each parameter affected the
+        error.
+-   **Gradient Clipping (Optional):** `torch.nn.utils.clip_grad_norm_`
+    -   If `config.GRAD_CLIP_VALUE` is set, this step prevents "exploding
+        gradients" (gradients becoming too large and destabilizing training)
+        by capping their overall magnitude (norm).
+-   **Update Model Weights:** `optimizer.step()`
+    -   The optimizer uses the calculated gradients and the current learning
+        rate to update the model's parameters, nudging them in a direction
+        that should reduce the loss on subsequent examples.
+-   **Update Learning Rate:** `scheduler.step()` (if a scheduler is used)
+    -   The learning rate is adjusted according to the scheduler's policy
+        (e.g., after each step or epoch).
+-   **Log Batch Metrics:** The loss for the current batch and the current
+    learning rate are logged to the `tqdm` progress bar and also
+    periodically to Weights & Biases for detailed tracking.
+
+Returns the average training loss over all batches in the epoch.
+
+```ascii
+For each BATCH in Training DataLoader:
++---------------------------------+
+| 1. Get Batch (Imgs, Caps)       |
++---------------------------------+
+                 |
+                 v
++---------------------------------+
+| 2. Move data to Device          |
++---------------------------------+
+                 |
+                 v
++---------------------------------+
+| 3. Zero Optimizer Grads         |
+|    `optimizer.zero_grad()`      |
++---------------------------------+
+                 |
+                 v
++---------------------------------+
+| 4. Forward Pass:                |  <-- Model
+|    `logits = model(imgs,dec_in)`|
++---------------------------------+
+                 |
+                 v
++---------------------------------+
+| 5. Calculate Loss:              |
+|    `loss = crit(logits,target)` |
++---------------------------------+
+                 |
+                 v
++---------------------------------+
+| 6. Backward Pass (Get Grads):   |
+|    `loss.backward()`            |
++---------------------------------+
+                 |
+                 v
++---------------------------------+
+| 7. Gradient Clipping (Optional) |
++---------------------------------+
+                 |
+                 v
++---------------------------------+
+| 8. Update Model Weights:        |
+|    `optimizer.step()`           |
++---------------------------------+
+                 |
+                 v
++---------------------------------+
+| 9. Update LR (Scheduler)        |
++---------------------------------+
+                 |
+                 v
++---------------------------------+
+| 10. Log Batch Loss & LR         |
++---------------------------------+
+```
+
+## 5. Checking Performance (`evaluate` function)
+
+This function is used to assess the model's performance on the validation
+dataset (data it hasn't seen during training).
+
+-   **Set Model to Evaluation Mode:** `model.eval()` tells PyTorch to
+    disable training-specific behaviors like dropout. This ensures
+    consistent and deterministic evaluation.
+-   **No Gradient Calculations:** `with torch.no_grad():` ensures that no
+    gradients are computed during evaluation, saving memory and computation
+    as they are not needed for just assessing performance.
+-   **Iterate Through Batches:** Similar to training, it loops through the
+    `val_dataloader`, getting one batch of validation data at a time.
+-   **Forward Pass & Calculate Loss:** It performs a forward pass to get
+    model predictions (logits) and calculates the loss using the
+    `criterion`, just like in training.
+
+Returns the average validation loss over all batches in the validation set.
+This loss indicates how well the model is generalizing to unseen data.
+
+## 6. The Main Orchestrator (`main` function)
+
+This is where everything comes together and the overall training process is
+managed:
+
+-   It performs all the setup steps described in section 2 and section 3.
+-   **Initialize Training State Variables:**
+    -   `start_epoch = 0`
+    -   `best_val_loss = float('inf')`
+-   **Attempt to Load Checkpoint (for Resuming):**
+    -   The script checks if `config.RESUME_CHECKPOINT_PATH` is provided and valid.
+    -   If yes:
+        -   It loads the checkpoint dictionary. This dictionary is expected to contain:
+            -   `epoch`: The last successfully completed epoch.
+            -   `model_state_dict`: The model's weights.
+            -   `optimizer_state_dict`: The optimizer's state.
+            -   `scheduler_state_dict`: The scheduler's state (if used).
+            -   `best_val_loss`: The best validation loss achieved up to that point.
+        -   The model, optimizer, and scheduler (if applicable) have their states loaded using their respective `load_state_dict` methods.
+        -   `start_epoch` is set to `checkpoint['epoch'] + 1`.
+        -   `best_val_loss` is updated from `checkpoint['best_val_loss']`.
+        -   A message is logged indicating training is resuming from `start_epoch`.
+    -   If no checkpoint is specified or found, training starts from scratch with `start_epoch = 0` and fresh initializations.
+-   **Training Loop:**
+    -   It then enters the main training loop, which runs from `start_epoch` up to `config.NUM_EPOCHS - 1`.
+    -   **For each epoch:**
+        -   It calls `train_one_epoch()` to train the model on the training
+            data for one epoch.
+        -   It prints the training loss and the duration of the epoch.
+        -   It logs epoch-level training metrics to Weights & Biases.
+        -   **Validation:** If the current epoch number is a multiple of
+            `config.VALIDATION_INTERVAL`:
+            -   It calls `evaluate()` to get the validation loss.
+            -   It prints and logs the validation loss.
+            -   **Checkpointing (Saving the Model):**
+                -   If the current `val_loss` is better than `best_val_loss`:
+                    -   `best_val_loss` is updated.
+                    -   A checkpoint dictionary is created containing:
+                        -   `epoch`: The current epoch number.
+                        -   `model_state_dict`: `model.state_dict()`.
+                        -   `optimizer_state_dict`: `optimizer.state_dict()`.
+                        -   `scheduler_state_dict`: `scheduler.state_dict()` (if a scheduler is used).
+                        -   `best_val_loss`: The current `best_val_loss`.
+                        -   Optionally, the `config` object or relevant parts of it.
+                    -   This dictionary is saved to a file using `save_file` (e.g., via `torch.save()`). The filename often includes epoch number and validation loss.
+                    -   **Hugging Face Hub Upload:** If configured, this new best checkpoint is uploaded.
+-   **Finalize WandB:** After the loop finishes, `wandb.finish()` closes the run.
+
+```ascii
+START main()
+  |
+  v
++---------------------------------------------+
+| Initial Setup:                              |
+| - Prep Dataset, WandB, HF Hub, Tokenizer,   |
+|   DataLoaders                               |
+| - Init Model, Optim, Loss, LR Scheduler     |
+|   (as new or placeholders)                  |
+| - `start_epoch = 0`, `best_val_loss = inf`  |
++---------------------------------------------+
+  |
+  v
+Is `config.RESUME_CHECKPOINT_PATH` set and valid?
+  |
+  +--> Yes:
+  |     +-------------------------------------+
+  |     | Load checkpoint file:               |
+  |     |  - `model.load_state_dict()`        |
+  |     |  - `optimizer.load_state_dict()`    |
+  |     |  - `scheduler.load_state_dict()`    |
+  |     |  - `start_epoch = ckpt_epoch + 1`   |
+  |     |  - `best_val_loss = ckpt_val_loss`  |
+  |     | Log: "Resuming from epoch X"        |
+  |     +-------------------------------------+
+  |
+  +--> No: (Log: "Starting fresh training")
+  |
+  v
+For EPOCH from `start_epoch` to `NUM_EPOCHS - 1`:
++---------------------------------------------+
+|  1. Call train_one_epoch()                  | -> (See diag)
+|     (Get train_loss)                        |
++---------------------------------------------+
+  |
+  v
++---------------------------------------------+
+|  2. Log Epoch Train Metrics (loss, duration)|
++---------------------------------------------+
+  |
+  v
+If (epoch % VALIDATION_INTERVAL == 0):
+  |
+  +--> Yes:
+  |     +-------------------------------------+
+  |     | 3a. Call evaluate() (Get val_loss)  |
+  |     +-------------------------------------+
+  |       |
+  |       v
+  |     +-------------------------------------+
+  |     | 3b. Log Val Metrics                 |
+  |     +-------------------------------------+
+  |       |
+  |       v
+  |     If (val_loss < best_val_loss):
+  |       |
+  |       +--> Yes:
+  |       |    +------------------------------+
+  |       |    | 4a. Update best_val_loss     |
+  |       |    +------------------------------+
+  |       |    | 4b. Save Checkpoint:         |
+  |       |    |      - epoch, model_state,   |
+  |       |    |        optim_state, sched_st,|
+  |       |    |        best_val_loss         |
+  |       |    |      (.safetensors or .pt)   |
+  |       |    +------------------------------+
+  |       |    | 4c. Upload Ckpt to HF Hub    |
+  |       |    |      (optional)              |
+  |       |    +------------------------------+
+  |       |
+  |       +--> No: (Continue)
+  |
+  +--> No: (Skip validation)
+  |
+  (Loop to next EPOCH or End)
+  |
+  v
++---------------------------------------------+
+| Training Finished.                          |
+| Finalize WandB Run.                         |
++---------------------------------------------+
+END main()
+```
+
+## 7. Resuming Training (New Section)
+
+The `train.py` script is designed to allow resumption of an interrupted or previously stopped training run. This is crucial for long training sessions to avoid losing progress.
+
+**How it Works:**
+
+1.  **Saving Comprehensive Checkpoints:** During training, whenever the model achieves a new best validation loss, a checkpoint is saved. This checkpoint now includes not only the model's weights (`model_state_dict`) but also:
+    *   The state of the optimizer (`optimizer_state_dict`).
+    *   The state of the learning rate scheduler (`scheduler_state_dict`), if one is active.
+    *   The epoch number that was just completed.
+    *   The best validation loss score achieved.
+    These are typically saved in a single file (e.g., `.pt` or `.safetensors` format) using `torch.save()`.
+
+2.  **Configuring Resumption:**
+    To resume training, you need to specify the path to a saved checkpoint file. This is done by setting the `RESUME_CHECKPOINT_PATH` variable in your `config.py` file (or through a corresponding command-line argument if the script is set up to accept one).
+    Example in `config.py`:
+    ```python
+    # config.py
+    # ... other configurations ...
+    RESUME_CHECKPOINT_PATH = "path/to/your/checkpoint_epoch_X_val_Y.safetensors"
+    # Set to None or an empty string to train from scratch
+    ```
+
+3.  **Loading and Continuing:**
+    When `train.py` starts:
+    *   It checks if `RESUME_CHECKPOINT_PATH` is set.
+    *   If it is, the script loads the entire checkpoint dictionary from the specified file.
+    *   It then restores the states of the model, optimizer, and scheduler from the loaded data.
+    *   The `start_epoch` for the training loop is set to the epoch *after* the one saved in the checkpoint.
+    *   The `best_val_loss` is also restored, so the script knows the benchmark it's trying to beat.
+    *   Training then proceeds from this `start_epoch` for the remaining number of epochs specified by `NUM_EPOCHS`.
+
+**Benefits:**
+*   **Fault Tolerance:** Recover from crashes or interruptions without losing significant work.
+*   **Flexibility:** Stop training, analyze results, and then continue if desired.
+*   **Resource Saving:** Avoids re-training from the very beginning.
+
+If `RESUME_CHECKPOINT_PATH` is not set (e.g., it's `None` or an empty string), the script will initialize all components from scratch and start a fresh training run from epoch 0.
+
+## 8. What Happens When You Run the Script (Previously Section 7)
+
+The line `if __name__ == "__main__":` is a standard Python construct. It
+means that the `main()` function will only be called if the `train.py` script
+is executed directly (e.g., by running `python train.py` in the terminal),
+as opposed to being imported as a module into another script.
+
+In summary, `train.py` is a comprehensive script for training an image
+captioning model. It handles data preparation, tokenizer management, model
+initialization, the core training and validation loop, model saving
+(checkpointing) with support for resuming, and experiment tracking, with settings managed through
+`config.py`. 

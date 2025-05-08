@@ -97,7 +97,7 @@ The model is configured to use the Flickr30k dataset.
         ```
         You will be prompted for a token with `write` access, which you can generate at [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).
 
-2.  **Configuration:**
+2.  **Configuration:**4
     *   Modify `config.py` to set hyperparameters, choose the encoder model (`ENCODER_MODEL_NAME`), review file paths, etc.
     *   **Add Wandb Settings:** Ensure you add the following settings to `config.py` for experiment tracking:
         ```python
@@ -162,3 +162,32 @@ The structure *within* the `DATA_DIR` (once resolved) is typically:
 ```
 
 *The diagram above shows the project files. The data files (images, captions, etc.) will be located relative to the project root as specified by `DATA_DIR` in `config.py` (defaulting to one level up, then into `assets/multimodal_image_transformer/`).*
+
+### Model Checkpointing
+
+The script automatically saves model checkpoints during training:
+- Checkpoints are saved to the directory specified by `OUTPUT_DIR` in `config.py`.
+- A checkpoint is saved whenever the model achieves a new best (lowest) validation loss.
+- The filename includes the epoch number and the validation loss (e.g., `flickr30k_model_epoch_10_val_loss_0.75.pt`).
+- These checkpoints contain the model's state dictionary, optimizer state, scheduler state (if used), the completed epoch number, and the best validation loss achieved, allowing for training resumption.
+
+### Resuming Training
+
+To resume training from a saved checkpoint:
+1.  **Locate your checkpoint file**: This will be a `.pt` file in your `OUTPUT_DIR` (e.g., `checkpoints/flickr30k_model_epoch_10_val_loss_0.75.pt`).
+2.  **Update Configuration**: In your `config.py` file, set the `RESUME_CHECKPOINT_PATH` variable to the full path of this checkpoint file.
+    ```python
+    # In config.py
+    # ... other configurations ...
+    RESUME_CHECKPOINT_PATH = "/path/to/your/checkpoints/flickr30k_model_epoch_10_val_loss_0.75.pt" 
+    # Set to None or an empty string (or comment out) to train from scratch.
+    ```
+3.  **Run the Training Script**: Execute `python train.py` as usual.
+
+The script will automatically detect the `RESUME_CHECKPOINT_PATH`, load the model weights, optimizer state, learning rate scheduler state, and the last completed epoch. Training will then continue from where it left off for the remaining epochs specified by `NUM_EPOCHS`.
+
+If `RESUME_CHECKPOINT_PATH` is not set, is `None`, or points to a non-existent file, training will start from scratch.
+
+### Experiment Tracking with Weights & Biases
+
+<!-- ... existing code ... -->
