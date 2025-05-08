@@ -422,8 +422,9 @@ def main():
                     'epoch': epoch, # Save the completed epoch number (0-indexed)
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
-                    'best_val_loss': best_val_loss,
-                    'config': {k: v for k, v in config.__dict__.items() if not k.startswith('__') and not callable(v)} # Save non-private config attributes
+                    'best_val_loss': best_val_loss
+                    # Removed 'config' key to prevent pickling errors with module objects.
+                    # The config.py file itself should serve as the record of configuration.
                 }
                 if scheduler:
                     checkpoint_data['scheduler_state_dict'] = scheduler.state_dict()
