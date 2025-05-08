@@ -11,23 +11,20 @@ import json # For loading caption files in JSON format.
 from typing import List, Dict, Any, Tuple # Type hinting.
 import config # Project configuration file.
 # Import the specific Hugging Face image processor based on the encoder model specified in config.
-from transformers import ViTImageProcessor, CLIPProcessor
+# from transformers import ViTImageProcessor, CLIPProcessor # No longer needed
+from transformers import AutoImageProcessor # Use AutoImageProcessor for flexibility
 from tokenizer import get_tokenizer # Function to get the shared tokenizer instance.
 from tokenizers import Encoding # Type from the `tokenizers` library for tokenized output.
 
 # --- Global Image Processor Setup ---
 # Dynamically select and initialize the appropriate image processor from Hugging Face Transformers
-# based on the ENCODER_MODEL_NAME specified in the config.py file.
+# based on the IMAGE_PROCESSOR_NAME specified in the config.py file.
 # This processor will handle image normalization, resizing, and other necessary transformations.
-if "clip" in config.ENCODER_MODEL_NAME.lower():
-    # If the encoder name contains "clip", use CLIPProcessor.
-    image_processor = CLIPProcessor.from_pretrained(config.ENCODER_MODEL_NAME)
-elif "vit" in config.ENCODER_MODEL_NAME.lower():
-    # If the encoder name contains "vit" (and not "clip"), use ViTImageProcessor.
-    image_processor = ViTImageProcessor.from_pretrained(config.ENCODER_MODEL_NAME)
-else:
-    # If the encoder model type is not supported, raise an error.
-    raise ValueError(f"Unsupported encoder model type in config: {config.ENCODER_MODEL_NAME}. Please use 'clip' or 'vit' based models.")
+# Using AutoImageProcessor to automatically determine and load the correct processor.
+try:
+    image_processor = AutoImageProcessor.from_pretrained(config.IMAGE_PROCESSOR_NAME)
+except Exception as e:
+    raise ValueError(f"Could not load image processor '{config.IMAGE_PROCESSOR_NAME}'. Error: {e}")
 
 class ImageTextDataset(Dataset):
     """PyTorch Dataset for loading and preprocessing image-caption pairs.
