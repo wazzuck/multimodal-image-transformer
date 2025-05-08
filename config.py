@@ -26,6 +26,11 @@ OUTPUT_DIR = DATA_DIR  # Directory to save checkpoints, tokenizer, etc.
 # Ratio of the dataset to be used for training (e.g., 0.8 for 80% train, 20% validation).
 TRAIN_SPLIT_RATIO = 0.9
 
+# Number of worker processes for data loading. 
+# 0 means data will be loaded in the main process.
+# More workers can speed up data loading if I/O or CPU preprocessing is a bottleneck.
+NUM_WORKERS = 2
+
 # --- Model Settings ---
 # Specifies the pre-trained image encoder model to be used from Hugging Face Transformers.
 # Different encoders capture image features differently and may affect performance.
