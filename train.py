@@ -301,7 +301,7 @@ def main():
     print(f"Initializing model: {config.ENCODER_MODEL_NAME} encoder, with {config.DECODER_LAYERS} decoder layers.")
     # Instantiate the ImageToTextModel.
     model = ImageToTextModel(
-        encoder_model_name=config.ENCODER_MODEL_NAME, # Name of the pre-trained vision encoder.
+        # encoder_model_name is loaded from config inside the model's __init__
         decoder_vocab_size=actual_vocab_size,         # Actual vocabulary size from the tokenizer.
         decoder_embed_dim=config.DECODER_EMBED_DIM,   # Embedding dimension for decoder tokens.
         decoder_heads=config.DECODER_HEADS,           # Number of attention heads in decoder.
@@ -309,8 +309,8 @@ def main():
         decoder_ff_dim=config.DECODER_FF_DIM,         # Feed-forward dimension in decoder layers.
         decoder_max_seq_len=config.MAX_SEQ_LEN,       # Maximum sequence length for decoder.
         decoder_dropout=config.DECODER_DROPOUT,       # Dropout rate for regularization in decoder.
-        decoder_pad_idx=config.PAD_TOKEN_ID,          # Padding token ID from config.
-        projection_dim=config.PROJECTION_DIM          # Dimension for projecting encoder features.
+        decoder_pad_idx=config.PAD_TOKEN_ID          # Padding token ID from config.
+        # projection_dim is determined and handled inside the model's __init__
     ).to(device) # Move the model to the configured device.
     print("Model initialized and moved to device.")
 
