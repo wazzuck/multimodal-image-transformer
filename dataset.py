@@ -30,7 +30,15 @@ else:
     raise ValueError(f"Unsupported encoder model type in config: {config.ENCODER_MODEL_NAME}. Please use 'clip' or 'vit' based models.")
 
 class ImageTextDataset(Dataset):
-    """PyTorch Dataset for loading and preprocessing image-caption pairs."""
+    """PyTorch Dataset for loading and preprocessing image-caption pairs.
+
+    If an image in the `captions_file` has multiple associated captions, this dataset
+    creates a distinct image-caption pair for each one. For example, if 'image1.jpg'
+    has ['caption A', 'caption B'], it results in two separate training examples:
+    ('image1.jpg', 'caption A') and ('image1.jpg', 'caption B').
+    This approach ensures the model learns from all provided caption variations for
+    each image during training.
+    """
     def __init__(self, image_dir: str, captions_file: str, max_seq_len: int):
         """
         Initializes the ImageTextDataset.

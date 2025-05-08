@@ -2,16 +2,16 @@
 Main training script for the Multimodal Image Transformer.
 """
 
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
+import torch # PyTorch library, for tensor computations and neural networks.
+import torch.nn as nn # Neural network module from PyTorch, for layers and loss functions.
+import torch.optim as optim # Optimization algorithms from PyTorch, like Adam or SGD.
+from torch.utils.data import DataLoader, random_split # Utilities for loading and splitting datasets.
 from model import ImageToTextModel # The main model combining encoder and decoder.
 from dataset import ImageTextDataset, collate_fn # Custom dataset and collate function for batching.
-from tokenizer import get_tokenizer, train_tokenizer, get_vocab_size as get_tokenizer_vocab_size # Tokenizer utilities.
+from tokenizer import get_tokenizer, train_tokenizer, get_tokenizer_vocab_size # Tokenizer utilities.
 import config # Configuration file with all hyperparameters and paths.
-import os
-import time
+import os # Operating system functionalities, like file and directory manipulation.
+import time # Time-related functions, for measuring execution time.
 import json # For loading captions if needed (e.g., for tokenizer training).
 from tqdm import tqdm # For displaying progress bars during training and evaluation.
 import prepare_dataset # Script to download and prepare the dataset.
