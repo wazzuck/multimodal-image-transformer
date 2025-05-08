@@ -27,8 +27,12 @@ OUTPUT_DIR = DATA_DIR  # Directory to save checkpoints, tokenizer, etc.
 # Specifies the pre-trained image encoder model to be used from Hugging Face Transformers.
 # Different encoders capture image features differently and may affect performance.
 # Examples: "google/vit-base-patch16-224-in21k" (Vision Transformer), "openai/clip-vit-base-patch32" (CLIP's ViT).
-ENCODER_MODEL_NAME = "google/vit-base-patch16-224-in21k"
+#ENCODER_MODEL_NAME = "google/vit-base-patch16-224-in21k"
 #ENCODER_MODEL_NAME = "openai/clip-vit-base-patch32" # Alternative option for CLIP-based encoder.
+ENCODER_MODEL_NAME = "Salesforce/blip-image-captioning-base"
+
+# Specifies the image processor to be used, corresponding to the encoder model.
+IMAGE_PROCESSOR_NAME = "Salesforce/blip-image-captioning-base"
 
 # Decoder hyperparameters - These define the architecture of the Transformer decoder.
 # Size of the vocabulary the decoder will predict over. This should match the tokenizer's vocabulary size.

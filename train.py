@@ -411,7 +411,9 @@ def main():
             if val_loss < best_val_loss:
                 best_val_loss = val_loss # Update the best validation loss.
                 # Construct checkpoint filename with epoch and validation loss.
-                checkpoint_filename = f"{config.CHECKPOINT_PREFIX}_epoch_{epoch+1}_val_loss_{val_loss:.4f}.pt"
+                # Sanitize encoder model name for use in filename
+                safe_encoder_name = config.ENCODER_MODEL_NAME.replace('/', '_')
+                checkpoint_filename = f"{config.CHECKPOINT_PREFIX}_{safe_encoder_name}_epoch_{epoch+1}_val_loss_{val_loss:.4f}.pt"
                 checkpoint_path = os.path.join(config.OUTPUT_DIR, checkpoint_filename)
 
                 # Prepare checkpoint dictionary
