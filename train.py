@@ -264,10 +264,11 @@ def main():
     full_dataset = ImageTextDataset(
         image_dir=config.IMAGE_DIR,
         captions_file=config.CAPTIONS_FILE,
-        tokenizer=tokenizer, # Pass the loaded tokenizer.
-        image_processor_name=config.IMAGE_PROCESSOR_NAME, # Name of HF image processor.
-        max_seq_len=config.MAX_SEQ_LEN, # Max sequence length for padding/truncation.
-        img_transform_mode=config.IMG_TRANSFORM_MODE # 'hf_processor' or 'custom'
+        max_seq_len=config.MAX_SEQ_LEN
+        # tokenizer, image_processor_name, and img_transform_mode are not part of ImageTextDataset __init__ signature
+        # tokenizer is obtained via get_tokenizer() within the dataset
+        # image_processor is globally defined and used within the dataset
+        # img_transform_mode is not currently used by ImageTextDataset
     )
 
     # Split the dataset into training and validation sets.
