@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import config
 # Removed direct dependency on old encoder utilities, using Hugging Face AutoModel directly.
-from transformers import AutoModel, AutoFeatureExtractor # For loading pre-trained models and their feature extractors.
+from transformers import AutoModel # For loading pre-trained models.
 from decoder import TransformerDecoder # The custom Transformer decoder module.
 
 class ImageToTextModel(nn.Module):
@@ -33,9 +33,10 @@ class ImageToTextModel(nn.Module):
         print(f"Loading encoder model: {config.ENCODER_MODEL_NAME}...")
         # Load the pre-trained image encoder model (e.g., ViT, CLIP ViT) from Hugging Face Hub.
         self.encoder = AutoModel.from_pretrained(config.ENCODER_MODEL_NAME)
-        # Load the corresponding feature extractor for the chosen encoder.
-        # This handles image preprocessing (resizing, normalization) specific to the encoder.
-        self.feature_extractor = AutoFeatureExtractor.from_pretrained(config.ENCODER_MODEL_NAME)
+        # The feature_extractor/image_processor is handled by the dataset loader for training/eval.
+        # For inference via the generate() method, image preprocessing will need to be handled
+        # or the generate() method adapted to use an externally provided processor.
+        # self.feature_extractor = AutoFeatureExtractor.from_pretrained(config.ENCODER_MODEL_NAME) # Removed
 
         # Freeze all parameters of the encoder to prevent them from being updated during training.
         # The encoder acts as a fixed feature extractor.
