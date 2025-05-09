@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import config
 # Removed direct dependency on old encoder utilities, using Hugging Face AutoModel directly.
-from transformers import AutoModel, BlipForConditionalGeneration # For loading pre-trained models.
+from transformers import AutoModel, BlipForConditionalGeneration, AutoImageProcessor # For loading pre-trained models and image processors.
 from decoder import TransformerDecoder # The custom Transformer decoder module.
 
 class ImageToTextModel(nn.Module):
@@ -31,14 +31,43 @@ class ImageToTextModel(nn.Module):
 
         # --- Load and Freeze Encoder ---
         print(f"Loading encoder model: {config.ENCODER_MODEL_NAME}...")
-        # Load the full BLIP model first
-        full_blip_model = BlipForConditionalGeneration.from_pretrained(config.ENCODER_MODEL_NAME)
-        # Assign its vision_model component as our encoder
-        self.encoder = full_blip_model.vision_model
-        # The feature_extractor/image_processor is handled by the dataset loader for training/eval.
-        # For inference via the generate() method, image preprocessing will need to be handled
-        # or the generate() method adapted to use an externally provided processor.
-        # self.feature_extractor = AutoFeatureExtractor.from_pretrained(config.ENCODER_MODEL_NAME) # Removed
+        if "blip" in config.ENCODER_MODEL_NAME.lower():
+            # Load the full BLIP model first
+            full_blip_model = BlipForConditionalGeneration.from_pretrained(config.ENCODER_MODEL_NAME)
+            # Assign its vision_model component as our encoder
+            self.encoder = full_blip_model.vision_model
+            # For BLIP vision model, hidden_size should be directly in its config
+            if hasattr(self.encoder.config, 'hidden_size'):
+                self.encoder_output_dim = self.encoder.config.hidden_size
+            # Fallback if BLIP vision_model's config is structured unexpectedly or to grab from parent
+            elif hasattr(full_blip_model.config, 'vision_config') and hasattr(full_blip_model.config.vision_config, 'hidden_size'):
+                print("Warning: Using full_blip_model.config.vision_config.hidden_size for encoder_output_dim.")
+                self.encoder_output_dim = full_blip_model.config.vision_config.hidden_size
+            else:
+                raise AttributeError(f"Could not determine encoder output dimension for BLIP model {config.ENCODER_MODEL_NAME} from its vision_model config or the full model's vision_config.")
+        else: # For ViT, CLIP, and other AutoModel compatible encoders
+            self.encoder = AutoModel.from_pretrained(config.ENCODER_MODEL_NAME)
+            if hasattr(self.encoder.config, 'hidden_size'):
+                self.encoder_output_dim = self.encoder.config.hidden_size
+            else:
+                raise AttributeError(f"Could not determine encoder output dimension for non-BLIP model {config.ENCODER_MODEL_NAME}. Expected 'hidden_size' in encoder.config.")
+        
+        # Initialize the image processor for use in the generate() method
+        try:
+            self.image_processor = AutoImageProcessor.from_pretrained(config.IMAGE_PROCESSOR_NAME)
+        except Exception as e:
+            # This provides a fallback or clearer error if IMAGE_PROCESSOR_NAME is problematic
+            # It's good practice as config might change, and this model part is crucial for inference.
+            print(f"Warning: Could not load image processor '{config.IMAGE_PROCESSOR_NAME}' directly. Error: {e}")
+            print("Attempting to use the processor from the full BLIP model as a fallback for inference.")
+            # BLIP models usually bundle their processor; BlipForConditionalGeneration might have it.
+            # Or, more robustly, ensure config.IMAGE_PROCESSOR_NAME is always correct.
+            # For now, let's assume config.IMAGE_PROCESSOR_NAME should be the primary source.
+            # If it truly fails, inference might need a specific processor instance passed or a different strategy.
+            # Raising an error or using a default might be options depending on desired robustness.
+            # For this fix, we'll rely on config.IMAGE_PROCESSOR_NAME being correctly set.
+            # If it fails here, the original error from AutoImageProcessor will be more informative.
+            raise ValueError(f"Failed to initialize image processor '{config.IMAGE_PROCESSOR_NAME}' for inference. Error: {e}")
 
         # Freeze all parameters of the encoder to prevent them from being updated during training.
         # The encoder acts as a fixed feature extractor.
@@ -47,22 +76,6 @@ class ImageToTextModel(nn.Module):
         self.encoder.eval() # Set the encoder to evaluation mode (disables dropout, etc.).
         print("Encoder model loaded and frozen.")
 
-        # Determine the output dimension of the encoder from its configuration.
-        # This is typically the hidden size of the encoder's last layer.
-        # For BLIP models, the vision model's hidden size is often in `vision_config.hidden_size`.
-        # Now that self.encoder is the vision_model, its config should directly have hidden_size.
-        if hasattr(self.encoder.config, 'hidden_size'):
-            self.encoder_output_dim = self.encoder.config.hidden_size
-        else:
-            # Fallback or error if hidden_size is not found (e.g. if vision_model config is structured differently)
-            # This might happen if config.ENCODER_MODEL_NAME is not a BLIP model in the future.
-            # For robust handling, one might check the type of self.encoder.config or look for other attributes.
-            print(f"Warning: Could not directly find 'hidden_size' in self.encoder.config ({type(self.encoder.config)}). Attempting to look for vision_config on the full model if available (less direct).")
-            if hasattr(full_blip_model.config, 'vision_config') and hasattr(full_blip_model.config.vision_config, 'hidden_size'):
-                 self.encoder_output_dim = full_blip_model.config.vision_config.hidden_size
-            else:
-                 raise AttributeError(f"Could not determine encoder output dimension from encoder config: {self.encoder.config} or {full_blip_model.config}")
-            
         self.decoder_embed_dim = decoder_embed_dim # Store decoder embedding dimension for clarity.
         self.decoder_pad_idx = decoder_pad_idx # Store decoder padding index.
 
@@ -160,10 +173,10 @@ class ImageToTextModel(nn.Module):
         self.eval() # Ensure the model is in evaluation mode (disables dropout, etc.).
         device = next(self.parameters()).device # Get the device the model is currently on.
 
-        # Preprocess the input PIL image using the feature extractor associated with the encoder.
+        # Preprocess the input PIL image using the image processor.
         # This typically involves resizing, normalization, and conversion to PyTorch tensors.
         # `return_tensors="pt"` ensures PyTorch tensors are returned.
-        inputs = self.feature_extractor(images=image, return_tensors="pt").to(device)
+        inputs = self.image_processor(images=image, return_tensors="pt").to(device)
         pixel_values = inputs['pixel_values'] # Extract the processed pixel values tensor.
                                             # Shape is typically (1, Channels, Height, Width).
 

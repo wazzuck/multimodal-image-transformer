@@ -1,5 +1,12 @@
 Notes for slides
 
+Learn about cross attention
+
+
+
+
+
+
 I had some interesting results
 
 If an image in the `captions_file` has multiple associated captions, this

@@ -25,7 +25,7 @@ def generate_caption(image_path: str, device: str) -> str:
     # Define the fixed path to the model checkpoint.
     # This path is hardcoded for simplicity in this inference script.
     # In a more general setup, this might be a configurable parameter.
-    checkpoint_path = "../assets/multimodal_image_transformer/multimodal_image_transformer_model_epoch1.safetensors"
+    checkpoint_path = "../assets/multimodal_image_transformer/model_checkpoint_epoch_10_val_loss_2.5425.safetensors"
 
     # Validate that the image file exists.
     if not os.path.exists(image_path):
