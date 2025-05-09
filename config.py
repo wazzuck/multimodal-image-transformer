@@ -134,3 +134,6 @@ BEAM_SIZE = 3 # Optional: for beam search decoding
 # Repository ID on the Hugging Face Model Hub if you plan to upload your trained models.
 # Format: "username/repository_name" or "organization_name/repository_name".
 HF_REPO_ID = "wazzuck/multimodal_image_transformer" # Repository ID on Hugging Face Hub
+
+# Whether to upload the best performing model checkpoints (based on validation loss) to the Hugging Face Hub.
+HF_UPLOAD_BEST_CHECKPOINTS = True
