@@ -347,7 +347,8 @@ def main():
     if hasattr(config, 'RESUME_CHECKPOINT_PATH') and config.RESUME_CHECKPOINT_PATH and os.path.exists(config.RESUME_CHECKPOINT_PATH):
         print(f"Attempting to resume training from checkpoint: {config.RESUME_CHECKPOINT_PATH}")
         try:
-            checkpoint = torch.load(config.RESUME_CHECKPOINT_PATH, map_location=device)
+            # Explicitly set weights_only=False as checkpoints contain more than just model weights (optimizer state, epoch, etc.)
+            checkpoint = torch.load(config.RESUME_CHECKPOINT_PATH, map_location=device, weights_only=False)
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             if scheduler and 'scheduler_state_dict' in checkpoint and checkpoint['scheduler_state_dict']:
