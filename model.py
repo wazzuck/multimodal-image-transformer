@@ -46,15 +46,24 @@ class ImageToTextModel(nn.Module):
             else:
                 raise AttributeError(f"Could not determine encoder output dimension for BLIP model {config.ENCODER_MODEL_NAME} from its vision_model config or the full model's vision_config.")
         else: # For ViT, CLIP, and other AutoModel compatible encoders
-            self.encoder = AutoModel.from_pretrained(config.ENCODER_MODEL_NAME)
-            # For CLIP models, the vision hidden size is typically in config.vision_config.hidden_size
-            # For standard ViT models, it might be directly in config.hidden_size
-            if hasattr(self.encoder.config, 'vision_config') and hasattr(self.encoder.config.vision_config, 'hidden_size'):
-                self.encoder_output_dim = self.encoder.config.vision_config.hidden_size
-            elif hasattr(self.encoder.config, 'hidden_size'): 
+            # Load the full model first (e.g., CLIPModel)
+            full_encoder_model = AutoModel.from_pretrained(config.ENCODER_MODEL_NAME)
+            # Check if it has a vision_model attribute (common for multimodal models like CLIP)
+            if hasattr(full_encoder_model, 'vision_model'):
+                self.encoder = full_encoder_model.vision_model
+            else: # Assume it's a standalone vision model (e.g., a raw ViT)
+                self.encoder = full_encoder_model
+
+            # Now self.encoder is the actual vision encoder part.
+            # Its config should directly contain hidden_size.
+            if hasattr(self.encoder.config, 'hidden_size'): 
                 self.encoder_output_dim = self.encoder.config.hidden_size
+            # Fallback for some CLIP vision models where config might be nested differently or on the parent
+            elif hasattr(full_encoder_model.config, 'vision_config') and hasattr(full_encoder_model.config.vision_config, 'hidden_size'):
+                print("Warning: Using full_encoder_model.config.vision_config.hidden_size for encoder_output_dim.")
+                self.encoder_output_dim = full_encoder_model.config.vision_config.hidden_size
             else:
-                raise AttributeError(f"Could not determine encoder output dimension for non-BLIP model {config.ENCODER_MODEL_NAME}. Expected 'hidden_size' in encoder.config or 'vision_config.hidden_size'. Config: {self.encoder.config}")
+                raise AttributeError(f"Could not determine encoder output dimension for non-BLIP model {config.ENCODER_MODEL_NAME}. Expected 'hidden_size' in encoder.config or full_encoder_model.config.vision_config.hidden_size. Config: {self.encoder.config}")
         
         # Initialize the image processor for use in the generate() method
         try:
