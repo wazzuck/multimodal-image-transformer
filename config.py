@@ -100,7 +100,7 @@ CHECKPOINT_PREFIX = "model_checkpoint" # Prefix for saved checkpoint filenames
 
 # Path to a specific checkpoint file (.pt) to resume training from.
 # Set to None or an empty string to start training from scratch.
-RESUME_CHECKPOINT_PATH = "../assets/multimodal_image_transformer/model_checkpoint_Salesforce_blip-image-captioning-base_epoch_2_val_loss_2.7088.safetensors"
+RESUME_CHECKPOINT_PATH = None
 
 # --- Tokenizer Settings ---
 # Special tokens used by the tokenizer and model.

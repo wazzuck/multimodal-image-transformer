@@ -34,50 +34,51 @@ Each Training EPOCH approx 17-18mins
             representation (features) that the text decoder can use.
         *   Mention that your project uses a pre-trained vision model (the
             `ENCODER_MODEL_NAME` from `config`).
-        *   **This is where you discuss ViT vs. BLIP:**
+        *   **This is where you discuss ViT vs. CLIP:**
             *   **Vision Transformer (ViT):**
                 *   **How it works (briefly):** Treats image patches as a
                     sequence, applying transformer architecture.
-                *   **Pros:** Strong performance on many vision tasks, captures
-                    global image context well. Many available pre-trained
-                    versions.
-                *   **Cons for Captioning:** Primarily a vision model. The
-                    features might not be inherently "aligned" with language.
-                    Requires a good projection layer (like your
-                    `PROJECTION_DIM`) to bridge the gap to the text decoder.
-                    The quality of alignment significantly impacts caption
-                    generation.
-            *   **BLIP (Bootstrapping Language-Image Pre-training) / BLIP-2 (or
-                similar models like CLIP, Florence):**
-                *   **How it works (conceptually):** These models are
-                    specifically pre-trained on vast amounts of *image-text
-                    pairs*. They learn joint representations of images and text.
+                *   **Pros:** Strong performance on many *pure* vision tasks (like
+                    image classification). Captures global image context well.
+                    Many available pre-trained versions (e.g., on ImageNet).
+                *   **Cons for Captioning:** 
+                    *   **Not Inherently Multimodal:** Pre-trained primarily on
+                        image classification. Its features are not naturally
+                        "aligned" with language concepts without further
+                        training on image-text data.
+                    *   **Requires Significant Adaptation for Language:** Needs a
+                        good projection layer and substantial fine-tuning on
+                        image-text pairs to bridge the gap to a text decoder.
+                        The quality of this alignment is crucial.
+            *   **CLIP (Contrastive Language-Image Pre-training):**
+                *   **How it works (conceptually):** Jointly trains an image
+                    encoder (often a ViT variant) and a text encoder. It learns
+                    to map images and their corresponding textual descriptions
+                    to a shared multimodal embedding space by pulling matching
+                    image-text pairs closer and pushing mismatched pairs apart.
                 *   **Pros for Captioning:**
-                    *   **Better Multimodal Alignment:** These models learn to
-                        create a shared semantic space where similar images and
-                        their corresponding text descriptions are mapped close
-                        together. This is achieved through:
-                        * Contrastive learning: Pushing matching image-text
-                          pairs closer while separating mismatched pairs
-                        * Image-text matching: Learning to predict whether an
-                          image and text pair are semantically related
-                        * Caption generation: Directly learning to generate
-                          text from images
-                    *   **Richer Semantic Understanding:** By learning from vast
-                        amounts of image-text pairs, these models develop a
-                        deeper understanding of how visual elements correspond
-                        to language concepts, enabling more accurate and
-                        nuanced descriptions.
-                    *   **Advanced Architecture Benefits:** Models like BLIP-2
-                        incorporate sophisticated mechanisms for combining
-                        visual and textual information, resulting in:
-                        * More natural and contextually appropriate captions
-                        * Better handling of complex visual scenes
-                        * More effective fine-tuning for specific captioning
-                          tasks
-                *   **Cons:** Increased model complexity and computational
-                    requirements. The choice of a specific BLIP variant also
-                    matters.
+                    *   **Excellent Multimodal Alignment:** Pre-trained on vast
+                        amounts of image-text pairs, so its image features are
+                        inherently aligned with language from the start. This
+                        is a major advantage for vision-language tasks.
+                    *   **Strong Foundation for Vision-Language Tasks:** Image
+                        embeddings from CLIP are generally much better suited for
+                        conditioning language models for tasks like captioning
+                        or VQA compared to a standard ViT, as they better
+                        capture shared semantics between visual and textual
+                        modalities.
+                    *   **Rich Semantic Features:** The learned image representations
+                        are rich in semantic meaning relevant to text.
+                *   **Cons for Captioning:**
+                    *   **Encoder Focus:** CLIP provides powerful image (and text)
+                        encoders. For caption *generation*, you still need a
+                        separate decoder model (like your TransformerDecoder)
+                        that takes CLIP's image embeddings as input.
+                    *   **Contrastive Objective:** While excellent for alignment,
+                        its primary pre-training objective isn't directly
+                        caption generation. Fine-tuning on a captioning
+                        dataset is still crucial for generating high-quality,
+                        descriptive captions.
             *   **Your Project's Choice:** State which one is currently
                 implemented (based on `config.ENCODER_MODEL_NAME`) and perhaps
                 why that initial choice was made (e.g., availability,
@@ -151,15 +152,14 @@ Each Training EPOCH approx 17-18mins
 *   **Challenges:** (e.g., dataset limitations, handling complex scenes,
     avoiding biases, computational resources).
 *   **Future Work:**
-    *   Experimenting with different encoders (if not already done, explicitly
-        mention trying BLIP or other vision-language models if you started
-        with ViT).
+    *   Experimenting with different encoders (e.g., trying BLIP if you started
+        with ViT/CLIP, or vice-versa).
     *   Trying more advanced decoding strategies (e.g., beam search).
     *   Scaling to larger datasets.
     *   Fine-tuning strategies for the encoder.
 
-When comparing ViT and BLIP, emphasize that BLIP (and similar models) are
-generally more aligned with the *multimodal nature* of image captioning from the
-outset due to their pre-training on image-text data.
-This often translates to better performance with less task-specific engineering
-for the vision-language interface.
+When comparing ViT and CLIP, emphasize that CLIP (and similar models like BLIP)
+_are generally more aligned with the *multimodal nature* of image captioning_
+_from the outset due to their pre-training on image-text data._
+_This often translates to better performance with less task-specific engineering_
+_for the vision-language interface compared to a standard ViT._
