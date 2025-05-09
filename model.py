@@ -47,10 +47,14 @@ class ImageToTextModel(nn.Module):
                 raise AttributeError(f"Could not determine encoder output dimension for BLIP model {config.ENCODER_MODEL_NAME} from its vision_model config or the full model's vision_config.")
         else: # For ViT, CLIP, and other AutoModel compatible encoders
             self.encoder = AutoModel.from_pretrained(config.ENCODER_MODEL_NAME)
-            if hasattr(self.encoder.config, 'hidden_size'):
+            # For CLIP models, the vision hidden size is typically in config.vision_config.hidden_size
+            # For standard ViT models, it might be directly in config.hidden_size
+            if hasattr(self.encoder.config, 'vision_config') and hasattr(self.encoder.config.vision_config, 'hidden_size'):
+                self.encoder_output_dim = self.encoder.config.vision_config.hidden_size
+            elif hasattr(self.encoder.config, 'hidden_size'): 
                 self.encoder_output_dim = self.encoder.config.hidden_size
             else:
-                raise AttributeError(f"Could not determine encoder output dimension for non-BLIP model {config.ENCODER_MODEL_NAME}. Expected 'hidden_size' in encoder.config.")
+                raise AttributeError(f"Could not determine encoder output dimension for non-BLIP model {config.ENCODER_MODEL_NAME}. Expected 'hidden_size' in encoder.config or 'vision_config.hidden_size'. Config: {self.encoder.config}")
         
         # Initialize the image processor for use in the generate() method
         try:

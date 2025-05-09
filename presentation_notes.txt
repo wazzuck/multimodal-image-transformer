@@ -158,8 +158,8 @@ Each Training EPOCH approx 17-18mins
     *   Scaling to larger datasets.
     *   Fine-tuning strategies for the encoder.
 
-When comparing ViT and CLIP, emphasize that CLIP (and similar models like BLIP)
-_are generally more aligned with the *multimodal nature* of image captioning_
-_from the outset due to their pre-training on image-text data._
-_This often translates to better performance with less task-specific engineering_
-_for the vision-language interface compared to a standard ViT._
+When comparing ViT and CLIP, emphasize that CLIP _is generally more aligned
+with the *multimodal nature* of image captioning_ _from the outset due to its
+pre-training on image-text data._ _This often translates to better performance
+with less task-specific engineering_ _for the vision-language interface
+compared to a standard ViT._
