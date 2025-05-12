@@ -1,0 +1,44 @@
+Vision Transformer (ViT) vs. CLIP's Image Encoder Comparison
+
+1.  Architectural Detail & Focus:
+
+    *   Vision Transformer (ViT - as typically depicted for image classification):
+        *   Focuses on the internal architecture of the ViT: image patching, linear projection, positional embeddings, [class] token, and a standard Transformer Encoder.
+        *   The output of the [class] token is usually fed to an MLP Head for classification.
+    *   CLIP's Image Encoder:
+        *   Often treated as a functional block within the larger CLIP system. Its internal architecture (which can be a ViT or a CNN) is less the focus in high-level CLIP diagrams.
+        *   Its primary role is to produce a vector embedding for an input image.
+
+2.  Training Paradigm & Objective:
+
+    *   ViT (for classification):
+        *   Typically trained for direct supervised image classification.
+        *   Learns to map an image directly to one of a predefined set of categories using a classification loss (e.g., cross-entropy).
+    *   CLIP's Image Encoder:
+        *   Trained using a contrastive pre-training objective.
+        *   Learns simultaneously with a Text Encoder to create aligned image and text embeddings in a shared multimodal space.
+        *   The goal is to make embeddings of matching image-text pairs similar and non-matching pairs dissimilar.
+
+3.  How Classification/Prediction is Performed:
+
+    *   ViT (for classification):
+        *   Classification is done by passing the final representation of the [class] token through an MLP Head with output units for each predefined class.
+    *   CLIP's Image Encoder (for zero-shot prediction):
+        *   Enables zero-shot classification for arbitrary classes at inference time.
+        *   This involves:
+            1.  Getting the image embedding from the Image Encoder.
+            2.  Creating text prompts for potential classes (e.g., "a photo of a [object]").
+            3.  Getting text embeddings for these prompts using the Text Encoder.
+            4.  Predicting the class by finding the text embedding most similar (e.g., via cosine similarity) to the image embedding.
+
+4.  Role of Text:
+
+    *   ViT (for classification):
+        *   Generally no explicit role for text or a text encoder in the image encoding or classification process itself. It's primarily a vision-only model for visual tasks.
+    *   CLIP's Image Encoder:
+        *   The Text Encoder is fundamental. The Image Encoder is co-trained with it to align representations.
+        *   The Text Encoder is actively used during zero-shot inference to create embeddings for class labels/descriptions.
+
+In Summary:
+
+The ViT diagram usually emphasizes the architecture of a vision model for supervised tasks. The CLIP diagram highlights a multimodal learning framework where an Image Encoder (which can be a ViT) learns representations aligned with text, enabling capabilities like zero-shot learning by comparing image features to text features. Your model `openai/clip-vit-base-patch32` uses a ViT architecture as its image encoder within the CLIP training framework. 

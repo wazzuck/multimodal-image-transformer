@@ -12,12 +12,15 @@ from tokenizer import get_tokenizer
 import os
 from safetensors.torch import load_file # For loading model weights from .safetensors files
 
-def generate_caption(image_path: str, device: str) -> str:
+DEFAULT_CHECKPOINT_PATH = "../assets/multimodal_image_transformer/model_checkpoint_openai_clip-vit-base-patch32_epoch_10_val_loss_2.4654.safetensors"
+
+def generate_caption(image_path: str, device: str, checkpoint_path: str) -> str:
     """Generates a caption for a single image using a predefined model checkpoint.
 
     Args:
         image_path: Path to the input image file.
         device: The device to run inference on ('cuda' or 'cpu').
+        checkpoint_path: Path to the .safetensors model checkpoint file.
 
     Returns:
         The generated caption string.
@@ -25,7 +28,7 @@ def generate_caption(image_path: str, device: str) -> str:
     # Define the fixed path to the model checkpoint.
     # This path is hardcoded for simplicity in this inference script.
     # In a more general setup, this might be a configurable parameter.
-    checkpoint_path = "../assets/multimodal_image_transformer/model_checkpoint_epoch_10_val_loss_2.5425.safetensors"
+    # checkpoint_path = "../assets/multimodal_image_transformer/model_checkpoint_openai_clip-vit-base-patch32_epoch_10_val_loss_2.4654.safetensors"
 
     # Validate that the image file exists.
     if not os.path.exists(image_path):
@@ -130,6 +133,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate text for an image using a trained model.")
     # Add an argument for the image path, making it required.
     parser.add_argument("--image_path", type=str, required=True, help="Path to the input image file.")
+    parser.add_argument(
+        "--checkpoint_path",
+        type=str,
+        default=DEFAULT_CHECKPOINT_PATH,
+        help="Path to the .safetensors model checkpoint file."
+    )
     args = parser.parse_args() # Parse the command-line arguments.
 
     # Determine the device for computation from the config file (e.g., 'cuda' if GPU is available, else 'cpu').
@@ -137,7 +146,7 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # Call the main generation function with the provided image path and configured device.
-    caption = generate_caption(args.image_path, device)
+    caption = generate_caption(args.image_path, device, args.checkpoint_path)
 
     # Print the results in a formatted way.
     print("\n---")

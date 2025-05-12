@@ -38,13 +38,14 @@ PIN_MEMORY = True if DEVICE == "cuda" else False
 # Specifies the pre-trained image encoder model to be used from Hugging Face Transformers.
 # Different encoders capture image features differently and may affect performance.
 # Examples: "google/vit-base-patch16-224-in21k" (Vision Transformer), "openai/clip-vit-base-patch32" (CLIP's ViT).
-#ENCODER_MODEL_NAME = "google/vit-base-patch16-224-in21k"
+ENCODER_MODEL_NAME = "google/vit-base-patch16-224-in21k"
 #ENCODER_MODEL_NAME = "Salesforce/blip-image-captioning-base"
-ENCODER_MODEL_NAME = "openai/clip-vit-base-patch32" # Using CLIP ViT model
+#ENCODER_MODEL_NAME = "openai/clip-vit-base-patch32" # Using CLIP ViT model
 
 # Specifies the image processor to be used, corresponding to the encoder model.
+IMAGE_PROCESSOR_NAME = "google/vit-base-patch16-224-in21k" # Using Google ViT processor
 #IMAGE_PROCESSOR_NAME = "Salesforce/blip-image-captioning-base"
-IMAGE_PROCESSOR_NAME = "openai/clip-vit-base-patch32" # Using CLIP ViT processor
+#IMAGE_PROCESSOR_NAME = "openai/clip-vit-base-patch32" # Using CLIP ViT processor
 
 # Specifies how image transformations are applied.
 # 'hf_processor': Use the transformations defined by the Hugging Face image processor.

@@ -16,7 +16,6 @@ training examples: ('image1.jpg', 'caption A') and ('image1.jpg', 'caption B').
 This approach ensures the model learns from all provided caption variations for
 each image during training.
 
-Each Training EPOCH approx 17-18mins
 
 **I. Project Overview & Goal:**
 
